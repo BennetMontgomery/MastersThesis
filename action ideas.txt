@@ -1,0 +1,11 @@
+Vehicle actions:
+
+changeLane(new lane) - execute a lane change to the new lane. Only possible if the new lane is connected to the current lane.
+
+changeSpeed(new speed) - accelerate or decelerate to the given speed (would use the slowDown command, which allows smooth deceleration/acceleration instead of spontaneous speed updating)
+
+stop - brake as fast as possible
+
+activateBlinker(left or right) - signal to following vehicle intention to change lanes or turn
+
+turn(left, right, straight) - set target for turning at the next junction (can go straight). When the car reaches the end of an edge, it must have a subsequent target edge to move to (or it will cause a jam). 

@@ -1,0 +1,15 @@
+<routes>
+    <!--- vehicle assuming standard Krauss hypothesis !-->
+    <vType id="type1" accel="0.8" sigma="0.5" length="5" maxspeed="70"/>
+
+    <!--- vehicle calibrated for manual control !-->
+    <vType id="agenttype" accel="4.0" sigma="1.0" length="5" maxspeed="100"/>
+
+    <vehicle id="npc1" type="type1" depart="0">
+        <route edges="-E8.15 E9 E8 E7.15"/>
+    </vehicle>
+
+    <vehicle id="agent" type="agenttype" depart="0">
+        <route edges="E2 RE2"/>
+    </vehicle>
+</routes>
