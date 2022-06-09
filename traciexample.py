@@ -6,7 +6,8 @@ import sumolib
 
 import sys
 sys.path.insert(1, './agents/')
-from agents.manual_agent_simple import ManualAgentSimple 
+from agents.manual_agent_simple import ManualAgentSimple
+from agents.manual_agent_observer import ManualAgentObserver
 
 ## CONSTANTS ##
 MAX_DECEL=7 # see brake()
@@ -20,12 +21,14 @@ libsumo.start(["sumo-gui", "-c", "./Sumoconfgs/simple.sumocfg", "--lateral-resol
 # step to 1
 libsumo.simulationStep()
 # instantiate agent
-default = ManualAgentSimple('agent', NETWORK, LANEUNITS, MAX_DECEL, MAX_ACCEL) 
+default = ManualAgentSimple('agent', NETWORK, LANEUNITS, MAX_DECEL, MAX_ACCEL)
+observer = ManualAgentObserver('observer', NETWORK, LANEUNITS, MAX_DECEL, MAX_ACCEL, True)
 agent_left = False
 
-for time_step in range(1, 50):
+for time_step in range(1, 75):
     try:
         default.select_action(libsumo.simulation_getTime())
+        observer.select_action(libsumo.simulation_getTime())
         libsumo.simulationStep()
     except libsumo.libsumo.TraCIException:
         if not agent_left:

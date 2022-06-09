@@ -8,11 +8,17 @@ class ManualAgentSimple(Agent):
         super().__init__(agentid, network, LANEUNITS, MAX_DECEL, MAX_ACCEL, verbose)
         self.changed_left = False
         self.changed_right = False
+        self.changing = False
+        self.reached_3_speed = False
+        self.reached_0_speed = False
 
-    def select_action(self, timestep, state=None):
+    def select_action(self, timestep):
         if timestep == 1:
-            libsumo.vehicle_setLaneChangeMode(self.agentid, 1)
-            self.change_speed(3, 2)
+            libsumo.vehicle_setLaneChangeMode(self.agentid, 0)
+            libsumo.vehicle_setSpeedMode(self.agentid, 0)
+
+        if not self.reached_3_speed or (timestep > 23 and libsumo.vehicle_getSpeed(self.agentid) < 3):
+            self.reached_3_speed = self.change_speed(3, 2)
 
         if libsumo.vehicle_getRoadID(self.agentid) == 'E2' and 'RE2' not in libsumo.vehicle_getRoute(self.agentid): 
             self.turn('RE2')
@@ -21,16 +27,18 @@ class ManualAgentSimple(Agent):
             self.turn('E-3')
 
         if timestep > 2 and not self.changed_left:
-            self.change_lane(1)
-            self.changed_left = True
+            self.changed_left = self.change_lane(1)
+            self.changing = not self.changed_left
 
         if timestep > 9 and not self.changed_right:
-            self.change_lane(0)
-            self.changed_right = True
+            self.changed_right = self.change_lane(0)
+            self.changing = not self.changed_right
 
+        if not self.changing and libsumo.vehicle_getLateralLanePosition(self.agentid) != 0:
+            self.lanewise_centre()
 
-        if timestep == 18:
-            self.change_speed(0.1, -1)
+        if timestep >= 20 and not self.reached_0_speed:
+            self.reached_0_speed = self.brake()
 
-        if timestep == 22:
-            self.change_speed(3, 1)
+        if self.reached_0_speed:
+            self.reached_3_speed = True
