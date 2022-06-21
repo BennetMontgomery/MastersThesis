@@ -3,10 +3,11 @@
 # IMPORTS #
 import libsumo
 from abc import ABC, abstractmethod
+from math import sqrt
 
 
 class Agent(ABC):
-    def __init__(self, agentid, network, LANEUNITS=0.5, MAX_DECEL=7, MAX_ACCEL=4, verbose=False):
+    def __init__(self, agentid, network, LANEUNITS=0.5, MAX_DECEL=7, MAX_ACCEL=4, verbose=False, VIEW_DISTANCE=0):
         # Class constants
         # Default vehicles have a max deceleration of 7 and acceleration of 4
         self.agentid = agentid
@@ -15,6 +16,10 @@ class Agent(ABC):
         self.MAX_DECEL = 7
         self.MAX_ACCEL = 4
         self.verbose = verbose
+        self.VIEW_DISTANCE = VIEW_DISTANCE
+
+        # vehicles in sight
+        self.view = []
 
         # async update variables
         self.lane = libsumo.vehicle_getLaneID(self.agentid)
@@ -99,3 +104,62 @@ class Agent(ABC):
     # American English friendly aliasing
     def lanewise_center(self):
         self.lanewise_centre()
+
+    def refresh_view(self):
+        coords = libsumo.vehicle_getPosition(self.agentid)
+
+        self.view = []
+        tmp_view = []
+
+        # list all vehicles within VIEW_DISTANCE
+        for vehicle in [i for i in libsumo.vehicle_getIDList() if i != self.agentid]:
+            vehicle_coords = libsumo.vehicle_getPosition(vehicle)
+            dist = sqrt((vehicle_coords[0]-coords[0])**2 + (vehicle_coords[1]-coords[1])**2)
+            if dist < self.VIEW_DISTANCE:
+                tmp_view.append((vehicle, dist))
+
+        # sort vehicles by distance
+        tmp_view = sorted(tmp_view, key=lambda veh: veh[1])
+
+        # remove vehicles blocked by other vehicles
+        # a vehicle counts as blocking the view if drawing a thread between the source and the target intersects a
+        # circle at the centre of the blocking vehicle with radius equal to half a vehicle width
+
+        # closest vehicle cannot be blocked
+        if len(tmp_view) > 0:
+            surveyed_vehicles = [tmp_view.pop(0)[0]]
+            self.view.append(surveyed_vehicles[0])
+
+        while len(tmp_view) > 0:
+            vehicle = tmp_view.pop(0)
+            veh_coords = libsumo.vehicle_getPosition(vehicle[0])
+            # determine blockage by closer vehicles
+            viewable = True
+            for surv in surveyed_vehicles:
+                surv_coords = libsumo.vehicle_getPosition(surv)
+                # calculate Determinant relative to potential blockage
+                D = (coords[0]-surv_coords[0])*(veh_coords[1]-surv_coords[1]) - (veh_coords[0]-surv_coords[0])*(coords[1]-surv_coords[1])
+                # calculate intersection. If r*r*d*d - D*D > 0, there is an intersection
+                if ((libsumo.vehicle_getWidth(surv)/2)**2) * (vehicle[1]**2) - (D**2) > 0:
+                    # calculate point of intersect. If it falls between the two vehicles, viewage is blocked
+                    dy = veh_coords[1]-coords[1]
+                    dx = veh_coords[0]-coords[0]
+                    if dy < 0:
+                        x = (D*dy + dx*sqrt((libsumo.vehicle_getWidth(surv)/2)**2) * (vehicle[1]**2) - (D**2))/((libsumo.vehicle_getWidth(surv)/2)**2)
+                    else:
+                        x = (D*dy - dx*sqrt((libsumo.vehicle_getWidth(surv)/2)**2) * (vehicle[1]**2) - (D**2))/((libsumo.vehicle_getWidth(surv)/2)**2)
+
+                    y = (-D*dx + abs(dy) * sqrt((libsumo.vehicle_getWidth(surv)/2)**2) * (vehicle[1]**2) - (D**2))/((libsumo.vehicle_getWidth(surv)/2)**2)
+
+                    if (dx < max(coords[0], veh_coords[0]) and dx > min(coords[0], veh_coords[0])) and (dy < max(coords[1], veh_coords[1]) and dy < min(coords[1], veh_coords[1])):
+                        viewable = False
+                        print("vehicle " + vehicle[0] + " is blocked from view by vehicle " + surv)
+                        break
+
+            if viewable:
+                self.view.append(vehicle[0])
+
+            surveyed_vehicles.append(vehicle[0])
+
+        if self.verbose:
+            print(self.agentid + " sees " + str(self.view) + " at timestep " + str(libsumo.simulation_getTime()))

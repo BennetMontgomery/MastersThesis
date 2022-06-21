@@ -1,6 +1,6 @@
 <routes>
     <!--- vehicle assuming standard Krauss hypothesis !-->
-    <vType id="type1" accel="0.8" sigma="0.5" length="5" maxspeed="70"/>
+    <vType id="type1" accel="0.8" sigma="0.5" length="5" maxspeed="2"/>
 
     <!--- vehicle calibrated for manual control !-->
     <vType id="agenttype" accel="4.0" emergencyDecel="7.0" sigma="0" length="5" maxspeed="100" color="red"/>
@@ -15,9 +15,17 @@
         <route edges="E1 RE1 RE2 E-3"/>
     </vehicle>
 
+    <vehicle id="npc2" type="type1" depart="0">
+        <route edges="E3 RE3 E-1"/>
+    </vehicle>
+
+    <vehicle id="npc3" type="type1" depart="0">
+        <route edges="RE3 RE1 RE2 RE3 RE1 RE2"/>
+    </vehicle>
+
     <vehicle id="agent" type="agenttype" depart="0">
         <route edges="E2"/>
     </vehicle>
 
-     <vehicle id="observer" type="obstype" route="first" depart="0"/>
+    <vehicle id="observer" type="obstype" route="first" depart="0"/>
 </routes>

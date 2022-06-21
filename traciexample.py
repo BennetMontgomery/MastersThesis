@@ -22,13 +22,15 @@ libsumo.start(["sumo-gui", "-c", "./Sumoconfgs/simple.sumocfg", "--lateral-resol
 libsumo.simulationStep()
 # instantiate agent
 default = ManualAgentSimple('agent', NETWORK, LANEUNITS, MAX_DECEL, MAX_ACCEL)
-observer = ManualAgentObserver('observer', NETWORK, LANEUNITS, MAX_DECEL, MAX_ACCEL, True)
+observer = ManualAgentObserver('observer', NETWORK, LANEUNITS, MAX_DECEL, MAX_ACCEL)
 agent_left = False
 
 for time_step in range(1, 75):
+
     try:
         default.select_action(libsumo.simulation_getTime())
         observer.select_action(libsumo.simulation_getTime())
+
         libsumo.simulationStep()
     except libsumo.libsumo.TraCIException:
         if not agent_left:
