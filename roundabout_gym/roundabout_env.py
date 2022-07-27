@@ -2,8 +2,13 @@ import gym
 from gym import spaces
 from agents.agent import Agent
 import numpy as np
-import sumolib
 import libsumo
+import os
+import random
+
+# Constants
+CONFIGS_PATH="../Sumoconfgs"
+EGO_TYPE = ['"agenttype"', '"4.0"', '"7.0"', '"5"', '"100"', '"red"']
 
 class RoundaboutEnv(gym.Env):
     metadata = {"render_modes" : ["sumo-gui", "cli"]}
@@ -15,16 +20,16 @@ class RoundaboutEnv(gym.Env):
         self.ego = ego # object reference to the ego agent
 
         # Observations are
-        self.observation_space = spaces.Dict(
-            {
-                "number": spaces.Discrete(n=100, start=0),
-                "speed": spaces.Box(low=-50, high=200, shape=(1,), dtype=np.float),
-                "accel": spaces.Box(low=-7, high=4, shape=(1,), dtype=np.float),
-                "laneid": spaces.Text(max_length=10),
-                "lanepos": spaces.Box(low=0, high=100000, shape=(1,), dtype=np.float),
-                "dti": spaces.Box(low=0, high=100000, shape=(1,), dtype=np.float)
-            }
-        )
+        # self.observation_space = spaces.Dict(
+        #     {
+        #         "number": spaces.Discrete(n=100, start=0),
+        #         "speed": spaces.Box(low=-50, high=200, shape=(1,), dtype=np.float),
+        #         "accel": spaces.Box(low=-7, high=4, shape=(1,), dtype=np.float),
+        #         "laneid": spaces.Text(max_length=10),
+        #         "lanepos": spaces.Box(low=0, high=100000, shape=(1,), dtype=np.float),
+        #         "dti": spaces.Box(low=0, high=100000, shape=(1,), dtype=np.float)
+        #     }
+        # )
 
         # Action space
         #   Index 0: Behaviour at time step
@@ -79,3 +84,49 @@ class RoundaboutEnv(gym.Env):
                 obs | light_dict
 
         return obs
+
+    def reset(self, seed=None, return_info=False, options=None):
+        # Seed random generator
+        random.seed()
+        super().reset(seed=seed)
+
+        ''' Open configuration files and select roundabout model '''
+        sumoconfigs = os.listdir("/home/blm/Documents/Thesis/Sumoconfgs-test")
+        networks = [entry for entry in sumoconfigs if entry.endswith(".net.xml")]
+
+        # select random network
+        network = random.choice(networks)
+        route = "{net}.rou.xml".format(net=network[:-7])
+
+        # place ego agent at lane 0 in a random edge at timestep 0
+        file = open("/home/blm/Documents/Thesis/Sumoconfgs-test/{net}".format(net=network))
+        reached_edges = False
+        edges = []
+        for line in file:
+            line = line.strip()
+            if line is not None and "edge id=" in line and "function=\"internal\"" not in line:
+                reached_edges = True
+                edges.append(line.split("edge id=")[1].split("\"")[1].split("\"")[0])
+            elif not reached_edges:
+                break
+
+        # always select a starting edge pointing towards a roundabout
+        start_edge = random.choice([edge for edge in edges if "-" not in edge])
+        # select a finishing edge pointing away from the roundabout
+        finish_edge = random.choice([edge for edge in edges if "-" in edge])
+        ego_type_line = '<vType id={ID} accel={ACCEL} emergencyDecel={EDECEL} sigma="0" length={LENGTH} maxspeed={MAX} color={COLOUR}>'.format(
+            ID = EGO_TYPE[0], ACCEL = EGO_TYPE[1], EDECEL = EGO_TYPE[2], LENGTH = EGO_TYPE[3], MAX = EGO_TYPE[4], COLOUR = EGO_TYPE[5]
+        )
+        ego_route_line = '<vehicle id = '
+
+        # compile sumocfg
+        # start simulation, advance to timestep 1
+
+    def step(self, action):
+        pass
+
+    def render(self):
+        pass
+
+    def close(self):
+        libsumo.simulation_close()
