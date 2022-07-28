@@ -1,14 +1,17 @@
 import gym
 from gym import spaces
-from agents.agent import Agent
-import numpy as np
 import libsumo
 import os
 import random
 
 # Constants
-CONFIGS_PATH="../Sumoconfgs"
-EGO_TYPE = ['"agenttype"', '"4.0"', '"7.0"', '"5"', '"100"', '"red"']
+CONFIGS_PATH="../Sumoconfgs/"
+EGO_TYPE = ['"agenttype"', '"4.0"', '"7.0"', '"5"', '"30"', '"red"']
+NPC_TYPE = ['"npctype"', '"0.8"', '"5"', '"14"']
+MIN_NPCS = 3
+MAX_NPCS = 6
+SPAWN_TIME_RANGE = 15
+
 
 class RoundaboutEnv(gym.Env):
     metadata = {"render_modes" : ["sumo-gui", "cli"]}
@@ -36,6 +39,8 @@ class RoundaboutEnv(gym.Env):
         #   Index 2: Speed change x0.5 at time step + 14
         self.action_space = spaces.MultiDiscrete([3, 22])
 
+        self.npc_depart_times = []
+
 
 
     ''' private method for collating observations for processing '''
@@ -61,7 +66,7 @@ class RoundaboutEnv(gym.Env):
         for vehicle in self.ego.view:
             vehicle_dict = {vehicle + str(self.ego.view.index(vehicle)): {
                 "speed": libsumo.vehicle_getSpeed(vehicle),
-                "laneid": libsumo.vehicle_getLaneID(vehicle),
+                "laneid": libsumo.vehicle_getLaneIndex(vehicle),
                 "lanepos": libsumo.vehicle_getLanePosition(vehicle)
             }}
 
@@ -70,7 +75,7 @@ class RoundaboutEnv(gym.Env):
         # append adjacent lane data
         target_lanes = []
         for lane in range(libsumo.edge_getLaneNumber(libsumo.vehicle_getRoadID(self.ego.agentid))):
-            if abs(lane - libsumo.vehicle_getLaneID(self.ego.agentid)) <= 1:
+            if abs(lane - libsumo.vehicle_getLaneIndex(self.ego.agentid)) <= 1:
                 target_lanes.append(lane)
 
         obs = obs | {"lanes": target_lanes}
@@ -96,31 +101,82 @@ class RoundaboutEnv(gym.Env):
 
         # select random network
         network = random.choice(networks)
-        route = "{net}.rou.xml".format(net=network[:-7])
+        route = "{net}rou.xml".format(net=network[:-7])
 
         # place ego agent at lane 0 in a random edge at timestep 0
-        file = open("/home/blm/Documents/Thesis/Sumoconfgs-test/{net}".format(net=network))
-        reached_edges = False
+        file = open(CONFIGS_PATH + "{net}".format(net=network))
         edges = []
         for line in file:
             line = line.strip()
             if line is not None and "edge id=" in line and "function=\"internal\"" not in line:
                 reached_edges = True
                 edges.append(line.split("edge id=")[1].split("\"")[1].split("\"")[0])
-            elif not reached_edges:
-                break
+
+        file.close()
 
         # always select a starting edge pointing towards a roundabout
-        start_edge = random.choice([edge for edge in edges if "-" not in edge])
+        start_edge = random.choice([edge for edge in edges if "-" not in edge and "R" not in edge])
         # select a finishing edge pointing away from the roundabout
         finish_edge = random.choice([edge for edge in edges if "-" in edge])
-        ego_type_line = '<vType id={ID} accel={ACCEL} emergencyDecel={EDECEL} sigma="0" length={LENGTH} maxspeed={MAX} color={COLOUR}>'.format(
+        ego_type_line = '<vType id={ID} accel={ACCEL} emergencyDecel={EDECEL} sigma="0" length={LENGTH} maxspeed={MAX} color={COLOUR}/>'.format(
             ID = EGO_TYPE[0], ACCEL = EGO_TYPE[1], EDECEL = EGO_TYPE[2], LENGTH = EGO_TYPE[3], MAX = EGO_TYPE[4], COLOUR = EGO_TYPE[5]
         )
-        ego_route_line = '<vehicle id = '
+        ego_route_line = '<vehicle id="{ID}" type={TYPE} depart="0">\n' \
+                         '        <route edges="{START} {END}"/>\n' \
+                         '    </vehicle>'.format(ID = self.ego.agentid, TYPE = EGO_TYPE[0], START = start_edge, END = finish_edge)
+
+        # populate environment with random vehicles departing at random times from random input edges
+        npc_type_line = '<vType id={ID} accel={ACCEL} sigma="0.5" length={LENGTH}/>'.format(
+            ID = NPC_TYPE[0], ACCEL = NPC_TYPE[1], LENGTH = NPC_TYPE[2], MAX = NPC_TYPE[3]
+        )
+
+        npc_routes = []
+        self.npc_depart_times = []
+
+        for i in range(random.randint(MIN_NPCS, MAX_NPCS)):
+            npc_start_edge = random.choice([edge for edge in edges if "-" not in edge])
+            finish_edge = random.choice([edge for edge in edges if "-" in edge])
+            spawn_time = random.randint(0, SPAWN_TIME_RANGE)
+            spawn_time += 5 if npc_start_edge == start_edge else 0 # prevent spawning at exact same time as ego
+            self.npc_depart_times.append(spawn_time)
+            npc_route_line = '<vehicle id="npc{ID}" type={TYPE} depart="{DEPART}">\n' \
+                         '        <route edges="{START} {END}"/>\n' \
+                         '    </vehicle>'.format(ID=i, TYPE=NPC_TYPE[0], DEPART=spawn_time, START=npc_start_edge, END=finish_edge)
+            npc_routes.append(npc_route_line)
+
+        # write route file
+        file = open(CONFIGS_PATH + "{route}".format(route=route), "w")
+
+        file.write("<routes>\n")
+        file.write("    " + ego_type_line + "\n\n")
+        file.write("    " + npc_type_line + "\n\n")
+        file.write("    " + ego_route_line + "\n\n")
+
+        for route in npc_routes:
+            file.write("    " + route + "\n\n")
+
+        file.write("</routes>\n")
+        file.close()
 
         # compile sumocfg
-        # start simulation, advance to timestep 1
+        os.system('/home/blm/Documents/Thesis/Sumoconfgs-test/sumocompile.sh')
+
+        # start simulation
+        libsumo.start(["sumo", "-c", "/home/blm/Documents/Thesis/Sumoconfgs-test/{config}sumocfg".format(config=network[:-7]), "--lateral-resolution=3.0"])
+
+        # trigger rerouting
+        libsumo.vehicle_rerouteTraveltime(self.ego.agentid)
+        for i in range(len(npc_routes)):
+            if self.npc_depart_times[i] == 0:
+                libsumo.vehicle_rerouteTraveltime("npc{num}".format(num=i))
+
+        # advance to timestep 0
+        libsumo.simulationStep()
+
+        # build initial observation
+        print(self._get_obs())
+        return self._get_obs()
+
 
     def step(self, action):
         pass

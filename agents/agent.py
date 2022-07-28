@@ -22,7 +22,7 @@ class Agent(ABC):
         self.view = []
 
         # async update variables
-        self.lane = libsumo.vehicle_getLaneID(self.agentid)
+        self.lane = None
 
     # ALL AGENTS MUST HAVE A DEFINED BEHAVIOUR GIVEN THE CURRENT TIMESTEP
     @abstractmethod
