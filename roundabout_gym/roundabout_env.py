@@ -1,5 +1,6 @@
 import gym
 from gym import spaces
+from agents.agent import Agent
 import libsumo
 import os
 import random
@@ -10,7 +11,7 @@ EGO_TYPE = ['"agenttype"', '"4.0"', '"7.0"', '"5"', '"30"', '"red"']
 NPC_TYPE = ['"npctype"', '"0.8"', '"5"', '"14"']
 MIN_NPCS = 3
 MAX_NPCS = 6
-SPAWN_TIME_RANGE = 15
+SPAWN_TIME_RANGE = 16
 
 
 class RoundaboutEnv(gym.Env):
@@ -96,7 +97,7 @@ class RoundaboutEnv(gym.Env):
         super().reset(seed=seed)
 
         ''' Open configuration files and select roundabout model '''
-        sumoconfigs = os.listdir("/home/blm/Documents/Thesis/Sumoconfgs-test")
+        sumoconfigs = os.listdir("{configs}".format(configs=CONFIGS_PATH))
         networks = [entry for entry in sumoconfigs if entry.endswith(".net.xml")]
 
         # select random network
@@ -131,17 +132,15 @@ class RoundaboutEnv(gym.Env):
         )
 
         npc_routes = []
-        self.npc_depart_times = []
+        self.npc_depart_times = random.sample(range(0, SPAWN_TIME_RANGE), random.randint(MIN_NPCS, MAX_NPCS))
+        self.npc_depart_times.sort()
 
-        for i in range(random.randint(MIN_NPCS, MAX_NPCS)):
+        for id in range(len(self.npc_depart_times)):
             npc_start_edge = random.choice([edge for edge in edges if "-" not in edge])
-            finish_edge = random.choice([edge for edge in edges if "-" in edge])
-            spawn_time = random.randint(0, SPAWN_TIME_RANGE)
-            spawn_time += 5 if npc_start_edge == start_edge else 0 # prevent spawning at exact same time as ego
-            self.npc_depart_times.append(spawn_time)
+            npc_finish_edge = random.choice([edge for edge in edges if "-" in edge])
             npc_route_line = '<vehicle id="npc{ID}" type={TYPE} depart="{DEPART}">\n' \
-                         '        <route edges="{START} {END}"/>\n' \
-                         '    </vehicle>'.format(ID=i, TYPE=NPC_TYPE[0], DEPART=spawn_time, START=npc_start_edge, END=finish_edge)
+                         '        <route edges="{START} {FINISH}"/>\n' \
+                         '    </vehicle>'.format(ID=id, TYPE=NPC_TYPE[0], DEPART=self.npc_depart_times[id], START=npc_start_edge, FINISH=npc_finish_edge)
             npc_routes.append(npc_route_line)
 
         # write route file
@@ -159,10 +158,13 @@ class RoundaboutEnv(gym.Env):
         file.close()
 
         # compile sumocfg
-        os.system('/home/blm/Documents/Thesis/Sumoconfgs-test/sumocompile.sh')
+        # os.system('{configs}sumocompile.sh'.format(configs=CONFIGS_PATH))
 
         # start simulation
-        libsumo.start(["sumo", "-c", "/home/blm/Documents/Thesis/Sumoconfgs-test/{config}sumocfg".format(config=network[:-7]), "--lateral-resolution=3.0"])
+        libsumo.start(["{render}".format(render="sumo" if self.render_mode == "cli" else "sumo-gui"),
+                       "-c",
+                       "{configs}{config}sumocfg".format(configs=CONFIGS_PATH, config=network[:-7]),
+                       "--lateral-resolution=3.0"])
 
         # trigger rerouting
         libsumo.vehicle_rerouteTraveltime(self.ego.agentid)
@@ -171,15 +173,26 @@ class RoundaboutEnv(gym.Env):
                 libsumo.vehicle_rerouteTraveltime("npc{num}".format(num=i))
 
         # advance to timestep 0
+
         libsumo.simulationStep()
 
         # build initial observation
-        print(self._get_obs())
         return self._get_obs()
 
 
     def step(self, action):
-        pass
+        # extract high level behaviour decision
+        behaviour = action[0]
+
+        # extract low level throttle decision
+        throttle = action[1]
+
+        # TODO: implement steering (irrelevant to SUMO)
+
+        # reroute vehicles appearing at this time step
+        for veh_id in self.npc_depart_times:
+            libsumo.vehicle_rerouteTraveltime("npc{num}".format(num=veh_id))
+
 
     def render(self):
         pass

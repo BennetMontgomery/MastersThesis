@@ -1,0 +1,30 @@
+<routes>
+    <vType id="agenttype" accel="4.0" emergencyDecel="7.0" sigma="0" length="5" maxspeed="30" color="red"/>
+
+    <vType id="npctype" accel="0.8" sigma="0.5" length="5"/>
+
+    <vehicle id="agent" type="agenttype" depart="0">
+        <route edges="E3 E-1"/>
+    </vehicle>
+
+    <vehicle id="npc0" type="npctype" depart="4">
+        <route edges="RE1 E-3"/>
+    </vehicle>
+
+    <vehicle id="npc1" type="npctype" depart="6">
+        <route edges="E3 E-2"/>
+    </vehicle>
+
+    <vehicle id="npc2" type="npctype" depart="8">
+        <route edges="RE3 E-1"/>
+    </vehicle>
+
+    <vehicle id="npc3" type="npctype" depart="12">
+        <route edges="E3 E-3"/>
+    </vehicle>
+
+    <vehicle id="npc4" type="npctype" depart="15">
+        <route edges="RE2 E-3"/>
+    </vehicle>
+
+</routes>
