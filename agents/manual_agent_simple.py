@@ -1,6 +1,6 @@
 # IMPORTS 
 import libsumo 
-from agent import Agent
+from agents.agent import Agent
 
 
 class ManualAgentSimple(Agent):
