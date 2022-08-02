@@ -24,9 +24,11 @@ class BehaviourNet(tf.keras.Model):
         self.hidden_layers = [tf.keras.layers.Dense(layer, activation='relu') for layer in layers]
 
         # Building output layer:
-        #   0: follow leader
-        #   1: choose turn
-        #   2: change lane
+        #   0: change lane left
+        #   1: change lane right
+        #   1: choose turn left
+        #   2: choose turn right
+        #   3: follow leader
         self.output_layer = tf.keras.layers.Dense(3, activation='linear')
 
 '''

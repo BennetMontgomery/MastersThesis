@@ -11,13 +11,17 @@ EGO_TYPE = ['"agenttype"', '"4.0"', '"7.0"', '"5"', '"30"', '"red"']
 NPC_TYPE = ['"npctype"', '"0.8"', '"5"', '"14"']
 MIN_NPCS = 3
 MAX_NPCS = 6
+COLLISION_REWARD = -10
+GOAL_REWARD = 10
+TIMESTEP_REWARD = -1
+ILLEGAL_LANE_CHANGE_REWARD = -1
 SPAWN_TIME_RANGE = 16
 
 
 class RoundaboutEnv(gym.Env):
     metadata = {"render_modes" : ["sumo-gui", "cli"]}
 
-    def __init__(self, ego, render_mode: str = "cli"):
+    def __init__(self, ego : Agent, render_mode: str = "cli"):
         assert render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
 
@@ -37,8 +41,12 @@ class RoundaboutEnv(gym.Env):
 
         # Action space
         #   Index 0: Behaviour at time step
-        #   Index 2: Speed change x0.5 at time step + 14
+        #   Index 2: Acceleration x0.5 at time step + 14
         self.action_space = spaces.MultiDiscrete([3, 22])
+        # lane change variables
+        self.changing_lanes = False
+        self.start_lane = None
+        self.target_lane = None
 
         self.npc_depart_times = []
 
@@ -103,6 +111,8 @@ class RoundaboutEnv(gym.Env):
         # select random network
         network = random.choice(networks)
         route = "{net}rou.xml".format(net=network[:-7])
+
+        print(network)
 
         # place ego agent at lane 0 in a random edge at timestep 0
         file = open(CONFIGS_PATH + "{net}".format(net=network))
@@ -181,17 +191,93 @@ class RoundaboutEnv(gym.Env):
 
 
     def step(self, action):
+        # set timestep reward to 0
+        reward = 0
+
         # extract high level behaviour decision
         behaviour = action[0]
 
         # extract low level throttle decision
         throttle = action[1]
 
-        # TODO: implement steering (irrelevant to SUMO)
-
         # reroute vehicles appearing at this time step
-        for veh_id in self.npc_depart_times:
-            libsumo.vehicle_rerouteTraveltime("npc{num}".format(num=veh_id))
+        for i in range(len(self.npc_depart_times)):
+            if self.npc_depart_times[i] == libsumo.simulation_getTime():
+                libsumo.vehicle_rerouteTraveltime("npc{num}".format(num=i))
+
+        #### Apply action
+        # apply behaviour decision
+        if behaviour == 0: # change lane left
+            # sanity check: only change lanes if a lane exists
+            if libsumo.edge_getLaneNumber(libsumo.vehicle_getLaneIndex(self.ego.agentid)) - 1 \
+                    > libsumo.vehicle_getLaneIndex(self.ego.agentid):
+                # continue in progress lane change
+                if self.changing_lanes:
+                    # check if vehicle has reached target lane
+                    if libsumo.vehicle_getLaneIndex(self.ego.agentid) == self.target_lane:
+                        # lanewise centre, and terminate if successful
+                        self.changing_lanes = not self.ego.lanewise_centre()
+                        if not self.changing_lanes:
+                            self.source_lane = None
+                            self.target_lane = None
+                # if no lange change in progress, initiate lane change
+                else:
+                    self.changing_lanes = True
+                    self.source_lane = libsumo.edge_getLaneNumber(libsumo.vehicle_getLaneIndex(self.ego.agentid))
+                    self.target_lane = libsumo.edge_getLaneNumber(libsumo.vehicle_getLaneIndex(self.ego.agentid)) + 1
+                    self.ego.change_lane(self.target_lane)
+            # punish illegal lane change attempt
+            else:
+                reward -= ILLEGAL_LANE_CHANGE_REWARD
+
+        elif behaviour == 1: # change lane right
+            # sanity check: only change lanes if a lane exists
+            if libsumo.vehicle_getLaneIndex(self.ego.agentid) > 0:
+                # continue in progress lane change
+                if self.changing_lanes:
+                    # check if vehicle has reached target lane
+                    if libsumo.vehicle_getLaneIndex(self.ego.agentid) == self.target_lane:
+                        # lanewise centre, and terminate if successful
+                        self.changing_lanes = not self.ego.lanewise_centre()
+                        if not self.changing_lanes:
+                            self.source_lane = None
+                            self.target_lane = None
+                # if no lange change in progress, initiate lane change
+                else:
+                    self.changing_lanes = True
+                    self.source_lane = libsumo.edge_getLaneNumber(libsumo.vehicle_getLaneIndex(self.ego.agentid))
+                    self.target_lane = libsumo.edge_getLaneNumber(libsumo.vehicle_getLaneIndex(self.ego.agentid)) - 1
+                    self.ego.change_lane(self.target_lane)
+            # punish illegal lane change attempt
+            else:
+                reward -= ILLEGAL_LANE_CHANGE_REWARD
+        elif behaviour != 2: # follow leader does not require specific steering instructions
+            raise ValueError("Incorrect first index action value")
+
+        # convert throttle action value to speed change value
+        accel_val = (throttle - 14)/2
+        new_speed = libsumo.vehicle_getSpeed(self.ego.agentid) + accel_val
+
+        # apply throttle decision
+        self.ego.change_speed(new_speed, accel_val)
+
+        # increment simulation
+        libsumo.simulationStep()
+
+        # check if now in terminal state
+        if self.ego.agentid in libsumo.simulation_getCollidingVehiclesIDList():
+            # penalty for colliding with other vehicles
+            reward += COLLISION_REWARD
+            return self._get_obs(), reward, True, None
+        elif self.ego.agentid not in libsumo.vehicle_getIDList():
+            # reward for succesfully exiting goal state
+            reward += GOAL_REWARD
+            return self._get_obs(), reward, True, None
+
+        # apply timestep penalty
+        reward += TIMESTEP_REWARD
+
+        return self._get_obs(), reward, False, None
 
 
     def render(self):
