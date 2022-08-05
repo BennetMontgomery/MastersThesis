@@ -33,12 +33,12 @@ class BehaviourNet(tf.keras.Model):
             )
 
         # Rho network construction
-        self.rho_input_layer = tf.keras.layers.InputLayer(input_shape=(phi_layers[-1],))
+        self.rho_input_layer = tf.keras.layers.Dense(phi_layers[-1], activation='relu')
         self.rho_output_layer = tf.keras.layers.Dense(phi_layers[-2], activation='relu')
 
         # Q network
         # Building input layer
-        self.input_layer = tf.keras.layers.InputLayer(input_shape=(static_input_size + phi_layers[-2],))
+        self.input_layer = tf.keras.layers.Dense(static_input_size + phi_layers[-2], activation='relu')
 
         # Building fully connected intermediate layers
         self.hidden_layers = [tf.keras.layers.Dense(layer, activation='relu') for layer in q_layers]
@@ -81,7 +81,16 @@ class BehaviourNet(tf.keras.Model):
         phi_outputs = []
         for input in dynamic_inputs:
             # call matching phi network to generate vector for pooling
+            pass
 
+        # pool phi outputs
+        rho_input_vector = 0
+        for tensor in phi_outputs:
+            rho_input_vector = tf.add(rho_input_vector, tensor)
+
+        # pass to rho
+
+        # pass rho as dynamic input vector to Q
 
         for layer in self.hidden_layers:
             input = layer(input)
@@ -100,7 +109,7 @@ class BTNet(BehaviourNet):
         # phi and rho are built in super init call
 
         # Building q input layer. There is one extra input for behaviour token ID
-        self.q_input_layer = tf.keras.layers.InputLayer(input_shape=(psi_layers[-2] + static_state_size + 1,))
+        self.q_input_layer = tf.keras.layers.Dense(psi_layers[-2] + static_state_size + 1, activation='relu')
 
         # Building hidden layers
         self.hidden_layers = [tf.keras.layers.Dense(layer, activation='relu') for layer in q_layers]
