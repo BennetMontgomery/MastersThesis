@@ -26,9 +26,7 @@ class BehaviourNet(tf.keras.Model):
         # Building output layer:
         #   0: change lane left
         #   1: change lane right
-        #   1: choose turn left
-        #   2: choose turn right
-        #   3: follow leader
+        #   2: follow leader
         self.output_layer = tf.keras.layers.Dense(3, activation='linear')
 
 '''
@@ -46,6 +44,20 @@ class BTNet(tf.keras.Model):
 
         # Building hidden layers
         self.hidden_layers = [tf.keras.layers.Dense(layer, activation='relu') for layer in layers]
+
+        # Building output layer
+        self.output_layer = tf.keras.layers.Dense(22, activation='linear')
+
+    @tf.function
+    def call(self, inputs, **kwargs):
+        input = self.input_layer(inputs)
+        for layer in self.hidden_layers:
+            input = layer(input)
+
+        output = self.output_layer(layer)
+        return output
+
+
 
 class ProposedAgent(Agent):
     def __init__(self, agentid, network, LANEUNITS=0.5, MAX_DECEL=7, MAX_ACCEL=4, verbose=False, VIEW_DISTANCE=30):
