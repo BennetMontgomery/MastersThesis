@@ -16,17 +16,32 @@ SAVE_MODEL = False
         - change lane
 '''
 class BehaviourNet(tf.keras.Model):
-    def __init__(self, input_size, layers, memory_cap):
+    def __init__(self, static_input_size, variable_input_sizes, phi_layers, q_layers, memory_cap):
+        # ensure valid layer sizes
+        assert(len(phi_layers) > 1)
+
         super(BehaviourNet, self).__init__()
         # Network construction parameters
-        self.input_size = input_size
-        self.layers = layers
+        # Phi network construction
+        self.phi_networks = []
+        for object_type in variable_input_sizes:
+            self.phi_networks.append(
+                (
+                    tf.keras.layers.InputLayer(input_shape=(object_type,)),
+                    [tf.keras.layers.Dense(layer, activation='relu') for layer in phi_layers]
+                )
+            )
 
+        # Rho network construction
+        self.rho_input_layer = tf.keras.layers.InputLayer(input_shape=(phi_layers[-1],))
+        self.rho_output_layer = tf.keras.layers.Dense(phi_layers[-2], activation='relu')
+
+        # Q network
         # Building input layer
-        self.input_layer = tf.keras.layers.InputLayer(input_shape=(input_size,))
+        self.input_layer = tf.keras.layers.InputLayer(input_shape=(static_input_size + phi_layers[-2],))
 
         # Building fully connected intermediate layers
-        self.hidden_layers = [tf.keras.layers.Dense(layer, activation='relu') for layer in layers]
+        self.hidden_layers = [tf.keras.layers.Dense(layer, activation='relu') for layer in q_layers]
 
         # Building output layer:
         #   0: change lane left
@@ -58,8 +73,16 @@ class BehaviourNet(tf.keras.Model):
             raise ValueError("[!!] Replay Buffer queried before {batch} memories accumulated".format(batch=batch_size))
 
     @tf.function
-    def __call__(self, inputs, **kwargs):
-        input = self.input_layer(inputs)
+    def call(self, inputs, **kwargs):
+        static_input = inputs[0]
+        dynamic_inputs = inputs[1:]
+
+        # call phi networks
+        phi_outputs = []
+        for input in dynamic_inputs:
+            # call matching phi network to generate vector for pooling
+
+
         for layer in self.hidden_layers:
             input = layer(input)
 
@@ -72,14 +95,15 @@ class BehaviourNet(tf.keras.Model):
     converts it to an appropriate brake/speed value
 '''
 class BTNet(BehaviourNet):
-    def __init__(self, state_size, behaviour_code_num, layers, memory_cap):
-        super(BTNet, self).__init__(state_size + behaviour_code_num, layers, memory_cap)
+    def __init__(self, static_state_size, variable_state_sizes, psi_layers, q_layers, memory_cap):
+        super(BTNet, self).__init__(static_state_size + 1, variable_state_sizes, psi_layers, q_layers, memory_cap)
+        # phi and rho are built in super init call
 
-        # Building input layer
-        self.input_layer = tf.keras.layers.InputLayer(input_shape=(self.memory_size,))
+        # Building q input layer. There is one extra input for behaviour token ID
+        self.q_input_layer = tf.keras.layers.InputLayer(input_shape=(psi_layers[-2] + static_state_size + 1,))
 
         # Building hidden layers
-        self.hidden_layers = [tf.keras.layers.Dense(layer, activation='relu') for layer in layers]
+        self.hidden_layers = [tf.keras.layers.Dense(layer, activation='relu') for layer in q_layers]
 
         # Building output layer
         self.output_layer = tf.keras.layers.Dense(22, activation='linear')
@@ -112,7 +136,7 @@ class ProposedAgent(Agent):
         Experience = namedtuple('Experience', ['states', 'actions', 'rewards', 'state_primes', 'terminates'])
 
         # create policy networks and target networks with equivalent starting parameters
-        self.behaviour_net = BehaviourNet()
+        # self.behaviour_net = BehaviourNet()
 
 
 
