@@ -21,7 +21,7 @@ SPAWN_TIME_RANGE = 16
 class RoundaboutEnv(gym.Env):
     metadata = {"render_modes" : ["sumo-gui", "cli"]}
 
-    def __init__(self, ego : Agent, render_mode: str = "cli"):
+    def __init__(self, ego: Agent, render_mode: str = "cli"):
         assert render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
 
