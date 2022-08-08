@@ -83,22 +83,36 @@ class RoundaboutEnv(gym.Env):
         }
 
         # append vehicle tokens
+        vehicle_list = []
         for vehicle in self.ego.view:
-            vehicle_dict = {vehicle + str(self.ego.view.index(vehicle)): {
+            vehicle_list.append({vehicle + str(self.ego.view.index(vehicle)): {
                 "speed": libsumo.vehicle_getSpeed(vehicle),
                 "laneid": libsumo.vehicle_getLaneIndex(vehicle),
                 "lanepos": libsumo.vehicle_getLanePosition(vehicle),
                 "inedge": 1 if libsumo.vehicle_getRoadID(vehicle) == libsumo.vehicle_getRoadID(self.ego.agentid) else 0
-            }}
+            }})
 
-            obs = obs | vehicle_dict
+        if len(vehicle_list) > 0:
+            obs = obs | {"vehicles": vehicle_list}
 
         # append light data
+        light_list = []
         for light in libsumo.trafficlight_getIDList():
             if libsumo.vehicle_getLaneID(self.ego.agentid) is libsumo.trafficlight_getControlledLanes(light):
-                light_dict = {light: libsumo.trafficlight_getRedYellowGreenState(light)}
+                if libsumo.trafficlight_getRedYellowGreenState(light) in ['r', 'u']:
+                    light_val = 0
+                elif libsumo.trafficlight_getRedYellowGreenState(light) in ['y', 'Y']:
+                    light_val = 1
+                elif libsumo.trafficlight_getRedYellowGreenState(light) in ['g', 'G']:
+                    light_val = 2
+                else:
+                    light_val = None # traffic light is off and is functionally a stop sign
 
-                obs | light_dict
+                if light_val is not None:
+                    light_list.append({light: light_val})
+
+        if len(light_list) > 0:
+            obs = obs | {"lights": light_list}
 
         return obs
 
@@ -282,6 +296,8 @@ class RoundaboutEnv(gym.Env):
 
         return self._get_obs(), reward, False, None
 
+    def sample(self):
+        return self._get_obs()
 
     def render(self):
         pass

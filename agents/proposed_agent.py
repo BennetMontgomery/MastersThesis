@@ -1,6 +1,8 @@
 # IMPORTS
 import tensorflow as tf
+import numpy as np
 import random
+import math
 from agent import Agent
 from roundabout_gym.roundabout_env import RoundaboutEnv
 from collections import namedtuple
@@ -16,7 +18,7 @@ SAVE_MODEL = False
         - change lane
 '''
 class BehaviourNet(tf.keras.Model):
-    def __init__(self, static_input_size, variable_input_sizes, phi_layers, q_layers, memory_cap):
+    def __init__(self, static_input_size, variable_input_sizes, phi_layers, q_layers, memory_cap, e_decay=0.001):
         # ensure valid layer sizes
         assert(len(phi_layers) > 1)
 
@@ -58,6 +60,9 @@ class BehaviourNet(tf.keras.Model):
         self.memory = []
         self.mem_counter = 0
 
+        # set epsilon greedy decay
+        self.e_decay = e_decay
+
     def add_mem(self, experience):
         # fill to memory cap
         if len(self.memory) < self.memory_cap:
@@ -73,6 +78,17 @@ class BehaviourNet(tf.keras.Model):
             return random.sample(self.memory, batch_size)
         else:
             raise ValueError("[!!] Replay Buffer queried before {batch} memories accumulated".format(batch=batch_size))
+
+    def select_action(self, obs, step):
+        # get the probabiltiy of selecting a random action instead of e-greedy from policy
+        rate = math.exp(-1*step*self.e_decay)
+
+        if rate > random.random():
+            # return random action, exploration rate at current step, indicator that action was random
+            return random.randrange(3), rate, False
+        else:
+            # return argmax_a q(s, a), rate at current step, indicator that action was not random
+            return np.argmax(self(np.atleast_2d(np.atleast_2d(obs).astype('float32')))), rate, True
 
     @tf.function
     def call(self, inputs, **kwargs):
@@ -119,12 +135,12 @@ class BehaviourNet(tf.keras.Model):
     converts it to an appropriate brake/speed value
 '''
 class BTNet(BehaviourNet):
-    def __init__(self, static_state_size, variable_state_sizes, psi_layers, q_layers, memory_cap):
-        super(BTNet, self).__init__(static_state_size + 1, variable_state_sizes, psi_layers, q_layers, memory_cap)
+    def __init__(self, static_state_size, variable_state_sizes, phi_layers, q_layers, memory_cap):
+        super(BTNet, self).__init__(static_state_size + 1, variable_state_sizes, phi_layers, q_layers, memory_cap)
         # phi and rho are built in super init call
 
         # Building q input layer. There is one extra input for behaviour token ID
-        self.q_input_layer = tf.keras.layers.Dense(psi_layers[-2] + static_state_size + 1, activation='relu')
+        self.q_input_layer = tf.keras.layers.Dense(phi_layers[-2] + static_state_size + 1, activation='relu')
 
         # Building hidden layers
         self.hidden_layers = [tf.keras.layers.Dense(layer, activation='relu') for layer in q_layers]
@@ -132,13 +148,45 @@ class BTNet(BehaviourNet):
         # Building output layer
         self.output_layer = tf.keras.layers.Dense(22, activation='linear')
 
+    def select_action(self, obs, step):
+        # get the probabiltiy of selecting a random action instead of e-greedy from policy
+        rate = math.exp(-1*step*self.e_decay)
+
+        if rate > random.random():
+            # return random action, exploration rate at current step, indicator that action was random
+            return random.randrange(22), rate, False
+        else:
+            # return argmax_a q(s, a), rate at current step, indicator that action was not random
+            return np.argmax(self(np.atleast_2d(np.atleast_2d(obs).astype('float32')))), rate, True
+
 
 class ProposedAgent(Agent):
     def __init__(self, agentid, network, LANEUNITS=0.5, MAX_DECEL=7, MAX_ACCEL=4, verbose=False, VIEW_DISTANCE=30):
         super().__init__(agentid, network, LANEUNITS, MAX_DECEL, MAX_ACCEL, verbose, VIEW_DISTANCE)
 
+        # predeclared variables
         self.behaviour_net = None
         self.throttle_net = None
+
+    def flatten_obs(self, env_obs):
+        # flatten observations to something passable to tensorflow
+        static = np.array([env_obs["number"], env_obs["speed"], env_obs["accel"], env_obs["laneid"], env_obs["lanepos"],
+                           env_obs["dti"], env_obs["lanes"][0], env_obs["lanes"][1]])
+
+        vehicles = []
+
+        if "vehicles" in env_obs.keys():
+            for vehicle in env_obs["vehicles"]:
+                vehicles.append(np.array([vehicle[key] for key in vehicle.keys()]))
+
+        lights = []
+
+        if "lights" in env_obs.keys():
+            for light in env_obs["lights"]:
+                lights.append(np.array([light[key] for key in light.keys()]))
+
+        # return static vector followed by dynamic array observation vector
+        return static, [vehicles, lights]
 
     def train_nets(self):
         # HYPERPARAMS
@@ -151,16 +199,65 @@ class ProposedAgent(Agent):
         alpha = 0.001
         optimizer = tf.optimizers.Adam(alpha)
         b_layers = [200, 100, 100]
+        b_phi_layers = [20, 80]
         t_layers = [200, 100, 100]
+        t_phi_layers = [20, 80]
 
         # start environment
-        test_env = RoundaboutEnv(self)
+        self.test_env = RoundaboutEnv(self)
 
         # declare replay buffer experience format
         Experience = namedtuple('Experience', ['states', 'actions', 'rewards', 'state_primes', 'terminates'])
 
         # create policy networks and target networks with equivalent starting parameters
-        # self.behaviour_net = BehaviourNet()
+        self.behaviour_net = BehaviourNet(static_input_size=8, variable_input_sizes=[4, 1], phi_layers=b_phi_layers,
+                                          q_layers=b_layers, memory_cap=replay_cap)
+        self.target_behaviour_net = BehaviourNet(static_input_size=8, variable_input_sizes=[4, 1], phi_layers=b_phi_layers,
+                                          q_layers=b_layers, memory_cap=replay_cap)
+        policy_params = self.behaviour_net.trainable_variables
+        target_params = self.target_behaviour_net.trainable_variables
+
+        for pvar, tvar in zip(policy_params, target_params):
+            tvar.assign(pvar.numpy())
+
+        self.throttle_net = BTNet(static_state_size=8, variable_state_sizes=[4, 1], phi_layers=t_phi_layers,
+                                          q_layers=t_layers, memory_cap=replay_cap)
+        self.target_throttle_net = BTNet(static_state_size=8, variable_state_sizes=[4, 1], phi_layers=t_phi_layers,
+                                          q_layers=t_layers, memory_cap=replay_cap)
+
+        policy_params = self.throttle_net.trainable_variables
+        target_params = self.throttle_net.trainable_variables
+
+        for pvar, tvar in zip(policy_params, target_params):
+            tvar.assign(pvar.numpy())
+
+        # track reward history
+        reward_history = np.empty(episodes)
+
+        # train
+        for episode in range(episodes):
+            self.test_env.reset()
+
+            episode_return = 0
+            step = 0
+            loss_history = 0
+            terminated = False
+
+            while not terminated:
+                obs = self.flatten_obs(self.test_env.sample())
+                step += 1
+
+                # select behaviour according to e-greedy policy
+                b_action, _, _ = self.behaviour_net.select_action(obs, step)
+                # add selected behaviour to observation to pass to throttle net
+                t_static = np.append(obs[0], b_action)
+                t_dynamic = obs[1]
+                t_action, _, _ = self.throttle_net.select_action((t_static, t_dynamic), step)
+                # state_prime, reward, terminated = self.test_env.step(action)
+                # episode_return += reward
+
+                # store experience in replay buffer
+                # memory
 
 
 
