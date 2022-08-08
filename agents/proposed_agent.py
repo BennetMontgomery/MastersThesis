@@ -20,6 +20,8 @@ class BehaviourNet(tf.keras.Model):
         # ensure valid layer sizes
         assert(len(phi_layers) > 1)
 
+        self.variable_input_sizes = variable_input_sizes
+
         super(BehaviourNet, self).__init__()
         # Network construction parameters
         # Phi network construction
@@ -78,24 +80,37 @@ class BehaviourNet(tf.keras.Model):
         dynamic_inputs = inputs[1:]
 
         # call phi networks
-        phi_outputs = []
-        for input in dynamic_inputs:
-            # call matching phi network to generate vector for pooling
-            pass
+        # ASSUMPTION: dynamic inputs are passed in the same order as their equivalent phi networks
+        phi_input = self.phi_networks[0][0](dynamic_inputs[0])
+        for hidden_phi_layer in self.phi_networks[0][1]:
+            phi_input = hidden_phi_layer(phi_input)
 
-        # pool phi outputs
-        rho_input_vector = 0
-        for tensor in phi_outputs:
-            rho_input_vector = tf.add(rho_input_vector, tensor)
+        phi_outputs = phi_input
+        phi_network = 0
+        for input in range(1, len(dynamic_inputs)):
+            # call matching phi network to generate vector for pooling
+            # if we've reached a new type of input, switch to next phi network type
+            if len(dynamic_inputs[input]) != len(dynamic_inputs[input - 1]):
+                phi_network += 1
+
+            phi_input = self.phi_networks[phi_network][0](dynamic_inputs[input])
+            for hidden_phi_layer in self.phi_networks[0][1]:
+                phi_input = hidden_phi_layer(phi_input)
+
+            # pool phi outputs
+            phi_outputs = tf.add(phi_outputs, phi_input)
 
         # pass to rho
+        rho_input = self.rho_input_layer(phi_outputs)
+        rho_output = self.rho_output_layer(rho_input)
 
         # pass rho as dynamic input vector to Q
+        q_input = self.input_layer(rho_input)
 
         for layer in self.hidden_layers:
-            input = layer(input)
+            q_input = layer(q_input)
 
-        output = self.output_layer(input)
+        output = self.output_layer(q_input)
         return output
 
 
