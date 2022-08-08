@@ -6,7 +6,7 @@ import os
 import random
 
 # Constants
-CONFIGS_PATH="../Sumoconfgs/"
+CONFIGS_PATH="./Sumoconfgs/"
 EGO_TYPE = ['"agenttype"', '"4.0"', '"7.0"', '"5"', '"30"', '"red"']
 NPC_TYPE = ['"npctype"', '"0.8"', '"5"', '"14"']
 MIN_NPCS = 3
@@ -61,14 +61,25 @@ class RoundaboutEnv(gym.Env):
         # laneid: current lane the vehicle is in
         # lanepos: current longitudinal lane position
         # dti: distance to next intersection
+        # lanes: adjacent lane data
+
+        lanes_available = [0, 0]
+
+        if libsumo.edge_getLaneNumber(libsumo.vehicle_getRoadID(self.ego.agentid)) > libsumo.vehicle_getLaneIndex(self.ego.agentid):
+            lanes_available[0] = 1
+
+        if libsumo.vehicle_getLaneIndex(self.ego.agentid) > 0:
+            lanes_available[1] = 1
+
         obs = {
             "number": len(self.ego.view),
             "speed": libsumo.vehicle_getSpeed(self.ego.agentid),
             "accel": libsumo.vehicle_getAcceleration(self.ego.agentid),
-            "laneid": libsumo.vehicle_getLaneID(self.ego.agentid),
+            "laneid": libsumo.vehicle_getLaneIndex(self.ego.agentid),
             "lanepos": libsumo.vehicle_getLanePosition(self.ego.agentid),
             "dti": libsumo.lane_getLength(libsumo.vehicle_getLaneID(self.ego.agentid))
-                   - libsumo.vehicle_getLanePosition(self.ego.agentid)
+                   - libsumo.vehicle_getLanePosition(self.ego.agentid),
+            "lanes": lanes_available
         }
 
         # append vehicle tokens
@@ -76,19 +87,11 @@ class RoundaboutEnv(gym.Env):
             vehicle_dict = {vehicle + str(self.ego.view.index(vehicle)): {
                 "speed": libsumo.vehicle_getSpeed(vehicle),
                 "laneid": libsumo.vehicle_getLaneIndex(vehicle),
-                "lanepos": libsumo.vehicle_getLanePosition(vehicle)
+                "lanepos": libsumo.vehicle_getLanePosition(vehicle),
+                "inedge": 1 if libsumo.vehicle_getRoadID(vehicle) == libsumo.vehicle_getRoadID(self.ego.agentid) else 0
             }}
 
             obs = obs | vehicle_dict
-
-        # append adjacent lane data
-        target_lanes = []
-        for lane in range(libsumo.edge_getLaneNumber(libsumo.vehicle_getRoadID(self.ego.agentid))):
-            if abs(lane - libsumo.vehicle_getLaneIndex(self.ego.agentid)) <= 1:
-                target_lanes.append(lane)
-
-        obs = obs | {"lanes": target_lanes}
-
 
         # append light data
         for light in libsumo.trafficlight_getIDList():
