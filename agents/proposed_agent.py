@@ -88,7 +88,7 @@ class BehaviourNet(tf.keras.Model):
             return random.randrange(3), rate, False
         else:
             # return argmax_a q(s, a), rate at current step, indicator that action was not random
-            return np.argmax(self(np.atleast_2d(np.atleast_2d(obs).astype('float32')))), rate, True
+            return np.argmax(self(obs)), rate, True
 
     @tf.function
     def call(self, inputs, **kwargs):
@@ -157,7 +157,8 @@ class BTNet(BehaviourNet):
             return random.randrange(22), rate, False
         else:
             # return argmax_a q(s, a), rate at current step, indicator that action was not random
-            return np.argmax(self(np.atleast_2d(np.atleast_2d(obs).astype('float32')))), rate, True
+            #return np.argmax(self(np.atleast_2d(np.atleast_2d(obs).astype('float32')))), rate, True
+            return np.argmax(self(obs)), rate, True
 
 
 class ProposedAgent(Agent):
@@ -238,10 +239,14 @@ class ProposedAgent(Agent):
         for episode in range(episodes):
             self.test_env.reset()
 
+            # generic training variables
             episode_return = 0
             step = 0
-            loss_history = 0
+            loss_history = []
             terminated = False
+
+            #HER
+            states_reached_succesfully = []
 
             while not terminated:
                 obs = self.flatten_obs(self.test_env.sample())
@@ -253,13 +258,75 @@ class ProposedAgent(Agent):
                 t_static = np.append(obs[0], b_action)
                 t_dynamic = obs[1]
                 t_action, _, _ = self.throttle_net.select_action((t_static, t_dynamic), step)
-                # state_prime, reward, terminated = self.test_env.step(action)
-                # episode_return += reward
+                state_prime, reward, terminated = self.test_env.step([b_action, t_action])
+                episode_return += reward
 
                 # store experience in replay buffer
-                # memory
+                self.throttle_net.add_mem(Experience((t_static, t_dynamic), t_action, reward, state_prime, terminated))
+                self.behaviour_net.add_mem(Experience(obs, b_action, reward, state_prime, terminated))
+
+                # replay buffer sampling
+                if self.throttle_net.mem_counter > batch_size:
+                    # collect replay sample
+                    behaviour_memories = self.behaviour_net.sample_replay_batch(batch_size)
+                    throttle_memories = self.behaviour_net.sample_replay_batch(batch_size)
+                    behaviour_minibatch = Experience(*zip(*behaviour_memories))
+                    throttle_minibatch = Experience(*zip(*throttle_memories))
+
+                    behaviour_states = np.asarray(behaviour_minibatch[0])
+                    behaviour_actions = np.asarray(behaviour_minibatch[1])
+                    behaviour_rewards = np.asarray(behaviour_minibatch[2])
+                    behaviour_state_primes = np.asarray(behaviour_minibatch[3])
+                    behaviour_terminates = np.asarray(behaviour_minibatch[4])
+
+                    throttle_states = np.asarray(throttle_minibatch[0])
+                    throttle_actions = np.asarray(throttle_minibatch[1])
+                    throttle_rewards = np.asarray(throttle_minibatch[2])
+                    throttle_state_primes = np.asarray(throttle_minibatch[3])
+                    throttle_terminates = np.asarray(behaviour_minibatch[4])
+
+                    # calculate behaviour loss and apply grad descent
+                    q_prime = np.max(self.target_behaviour_net(np.atleast_2d(behaviour_state_primes).astype('float32')),
+                                     axis=1)
+                    q_optimal = np.where(behaviour_terminates, behaviour_rewards, behaviour_rewards + gamma * q_prime)
+                    q_optimal = tf.convert_to_tensor(q_optimal, dtype='float32')
+                    with tf.GradientTape() as tape:
+                        q = tf.math.reduce_sum(
+                            self.behaviour_net(np.atleast_2d(behaviour_states).astype('float32'))
+                            * tf.one_hot(behaviour_actions, 3), axis=1)
+
+                        b_loss = tf.math.reduce_mean(tf.square(q_optimal - q))
+
+                    # update the policy network weights using ADAM
+                    b_variables = self.behaviour_net.trainable_variables
+                    b_gradients = tape.gradient(b_loss, b_variables)
+                    optimizer.apply_gradients(zip(b_gradients, b_variables))
+
+                    # calculate throttle loss and apply grad descent
+                    q_prime = np.max(self.target_throttle_net(np.atleast_2d(throttle_state_primes).astype('float32')),
+                                     axis=1)
+                    q_optimal = np.where(throttle_terminates, throttle_rewards, throttle_rewards + gamma * q_prime)
+                    q_optimal = tf.convert_to_tensor(q_optimal, dtype='float32')
+                    with tf.GradientTape() as tape:
+                        q = tf.math.reduce_sum(
+                            self.throttle_net(np.atleast_2d(throttle_states).astype('float32'))
+                            * tf.one_hot(throttle_actions, 22), axis=1)
+
+                        t_loss = tf.math.reduce_mean(tf.square(q_optimal - q))
+
+                    # update using ADAM
+                    t_variables = self.throttle_net.trainable_variables
+                    t_gradients = tape.gradient(t_loss, t_variables)
+                    optimizer.apply_gradients(zip(t_gradients, t_variables))
+
+
+
+
+
 
 
 
     def select_action(self, time_step):
-        pass
+        # actions may not be selected without training
+        if (self.throttle_net is None) or (self.behaviour_net is None):
+            raise RuntimeError("[!!] Throttle net and Behaviour net must be trained or loaded before calling select_action.")
