@@ -83,13 +83,28 @@ class RoundaboutEnv(gym.Env):
         }
 
         # append vehicle tokens
+        # speed: speed of vehicle
+        # lane id: lane index of vehicle
+        # lanepos: longitudinal lane position of vehicle in lane index
+        # inedge: 1 if on same edge else 0
+        # intarget: 1 if on target link, else 0
+        # insource: 1 if on a lane linking to the current target, else 0
         vehicle_list = []
         for vehicle in self.ego.view:
+            target_edges = [i[0] for i in libsumo.lane_getLinks(libsumo.vehicle_getLaneID(vehicle))]
+
+            for i in range(len(target_edges)):
+                target_edges[i] = target_edges[i].split("_")[0]
+
             vehicle_list.append({vehicle + str(self.ego.view.index(vehicle)): {
                 "speed": libsumo.vehicle_getSpeed(vehicle),
                 "laneid": libsumo.vehicle_getLaneIndex(vehicle),
                 "lanepos": libsumo.vehicle_getLanePosition(vehicle),
-                "inedge": 1 if libsumo.vehicle_getRoadID(vehicle) == libsumo.vehicle_getRoadID(self.ego.agentid) else 0
+                "inedge": 1 if libsumo.vehicle_getRoadID(vehicle) == libsumo.vehicle_getRoadID(self.ego.agentid) else 0,
+                "intarget": 1 if libsumo.vehicle_getRoadID(vehicle) ==
+                                libsumo.vehicle_getRoute(self.ego.agentid)[libsumo.vehicle_getRouteIndex(self.ego.agentid)+1] else 0,
+                "insource": 1 if libsumo.vehicle_getRoute(self.ego.agentid)[libsumo.vehicle_getRouteIndex(self.ego.agentid)+1]
+                                in target_edges else 0
             }})
 
         if len(vehicle_list) > 0:
