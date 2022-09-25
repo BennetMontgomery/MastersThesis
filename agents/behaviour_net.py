@@ -1,6 +1,10 @@
 # IMPORTS
+import random
+import math
 import tensorflow as tf
-from attention import Encoder
+import numpy as np
+from attention import Encoder, Embedder
+from dqn import DQN
 
 
 class BehaviourNet(tf.keras.Model):
@@ -9,61 +13,22 @@ class BehaviourNet(tf.keras.Model):
 
         self.variable_input_size = variable_input_size
         self.static_input_size = static_input_size
+        self.e_decay = e_decay
 
         # construct sublayers
-        # embedding layer has a dimension of -50 to +50, in increments of 0.5
         # embedding layer
-        self.embedding_layer = tf.keras.layers.Embedding(200, attention_in_d, input_length=variable_input_size)
+        self.tokenizer = Embedder(variable_input_size, attention_in_d)
 
         # encoder layer
-        self.encoder = Encoder()
+        self.encoder = Encoder(attention_in_d, 8, q_layers[0], dropout_rate)
 
+        # Q subnet
+        self.q_subnet = DQN(q_layers)
 
-        # # ensure valid layer sizes
-        # assert (len(phi_layers) > 1)
-        #
-        # layer = tf.keras.layers.NotALayer()
-        #
-        # self.variable_input_sizes = variable_input_sizes
-        #
-        # super(BehaviourNet, self).__init__()
-        # # Network construction parameters
-        # # Phi network construction
-        # self.phi_networks = []
-        # for object_type in variable_input_sizes:
-        #     self.phi_networks.append(
-        #         (
-        #             tf.keras.layers.InputLayer(input_shape=(object_type,)),
-        #             [tf.keras.layers.Dense(layer, activation='relu') for layer in phi_layers]
-        #         )
-        #     )
-        #
-        # # Rho network construction
-        # self.rho_input_layer = tf.keras.layers.Dense(phi_layers[-1], activation='relu')
-        # self.rho_output_layer = tf.keras.layers.Dense(phi_layers[-2], activation='relu')
-        #
-        # # Q network
-        # # Building input layer
-        # self.input_layer = tf.keras.layers.Dense(static_input_size + phi_layers[-2], activation='relu')
-        #
-        # # Building fully connected intermediate layers
-        # self.hidden_layers = [tf.keras.layers.Dense(layer, activation='relu') for layer in q_layers]
-        #
-        # # Building output layer:
-        # #   0: change lane left
-        # #   1: change lane right
-        # #   2: follow leader
-        # self.output_layer = tf.keras.layers.Dense(3, activation='linear')
-        #
-        # # Replay buffer parameters
-        # self.memory_cap = memory_cap
-        #
-        # # instantiate buffer
-        # self.memory = []
-        # self.mem_counter = 0
-        #
-        # # set epsilon greedy decay
-        # self.e_decay = e_decay
+        # build memory buffer
+        self.memory_cap = memory_cap
+        self.memory = []
+        self.mem_counter = 0
 
     def add_mem(self, experience):
         # fill to memory cap
@@ -93,40 +58,49 @@ class BehaviourNet(tf.keras.Model):
             return np.argmax(self(obs)), rate, True
 
     @tf.function
-    def call(self, inputs, **kwargs):
+    def call(self, inputs: list[list[int]], **kwargs):
         static_input = inputs[0]
         dynamic_inputs = inputs[1:]
 
-        # call phi networks
-        # ASSUMPTION: dynamic inputs are passed in the same order as their equivalent phi networks
-        phi_input = self.phi_networks[0][0](dynamic_inputs[0])
-        for hidden_phi_layer in self.phi_networks[0][1]:
-            phi_input = hidden_phi_layer(phi_input)
+        # embed dynamic inputs
+        dynamic_inputs = [tf.convert_to_tensor(dynamic_input) for dynamic_input in dynamic_inputs]
+        for
 
-        phi_outputs = phi_input
-        phi_network = 0
-        for input in range(1, len(dynamic_inputs)):
-            # call matching phi network to generate vector for pooling
-            # if we've reached a new type of input, switch to next phi network type
-            if len(dynamic_inputs[input]) != len(dynamic_inputs[input - 1]):
-                phi_network += 1
 
-            phi_input = self.phi_networks[phi_network][0](dynamic_inputs[input])
-            for hidden_phi_layer in self.phi_networks[0][1]:
-                phi_input = hidden_phi_layer(phi_input)
 
-            # pool phi outputs
-            phi_outputs = tf.add(phi_outputs, phi_input)
-
-        # pass to rho
-        rho_input = self.rho_input_layer(phi_outputs)
-        rho_output = self.rho_output_layer(rho_input)
-
-        # pass rho as dynamic input vector to Q
-        q_input = self.input_layer(rho_input)
-
-        for layer in self.hidden_layers:
-            q_input = layer(q_input)
-
-        output = self.output_layer(q_input)
-        return output
+        # static_input = inputs[0]
+        # dynamic_inputs = inputs[1:]
+        #
+        # # call phi networks
+        # # ASSUMPTION: dynamic inputs are passed in the same order as their equivalent phi networks
+        # phi_input = self.phi_networks[0][0](dynamic_inputs[0])
+        # for hidden_phi_layer in self.phi_networks[0][1]:
+        #     phi_input = hidden_phi_layer(phi_input)
+        #
+        # phi_outputs = phi_input
+        # phi_network = 0
+        # for input in range(1, len(dynamic_inputs)):
+        #     # call matching phi network to generate vector for pooling
+        #     # if we've reached a new type of input, switch to next phi network type
+        #     if len(dynamic_inputs[input]) != len(dynamic_inputs[input - 1]):
+        #         phi_network += 1
+        #
+        #     phi_input = self.phi_networks[phi_network][0](dynamic_inputs[input])
+        #     for hidden_phi_layer in self.phi_networks[0][1]:
+        #         phi_input = hidden_phi_layer(phi_input)
+        #
+        #     # pool phi outputs
+        #     phi_outputs = tf.add(phi_outputs, phi_input)
+        #
+        # # pass to rho
+        # rho_input = self.rho_input_layer(phi_outputs)
+        # rho_output = self.rho_output_layer(rho_input)
+        #
+        # # pass rho as dynamic input vector to Q
+        # q_input = self.input_layer(rho_input)
+        #
+        # for layer in self.hidden_layers:
+        #     q_input = layer(q_input)
+        #
+        # output = self.output_layer(q_input)
+        # return output

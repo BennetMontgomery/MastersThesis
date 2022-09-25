@@ -8,6 +8,7 @@ from roundabout_gym.roundabout_env import RoundaboutEnv
 from collections import namedtuple
 from datetime import datetime
 from behaviour_net import BehaviourNet
+from dqn import DQN
 
 # CONSTANTS
 SAVE_MODEL = False
