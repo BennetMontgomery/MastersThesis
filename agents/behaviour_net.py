@@ -3,12 +3,17 @@ import random
 import math
 import tensorflow as tf
 import numpy as np
-from attention import Encoder, Embedder
-from dqn import DQN
+from agents.attention import Encoder, AttentionPooler
+from agents.dqn import DQN
 
+# CONSTANTS
+VERBOSE = False
 
 class BehaviourNet(tf.keras.Model):
-    def __init__(self, static_input_size, variable_input_size, attention_in_d, q_layers, memory_cap, e_decay=0.001, dropout_rate=0.1):
+    def __init__(self,
+                 static_input_size, variable_input_size,
+                 attention_in_d, q_layers, pooler_layers, attention_out_ff, attention_heads,
+                 memory_cap, e_decay=0.001, dropout_rate=0.01):
         super(BehaviourNet, self).__init__()
 
         self.variable_input_size = variable_input_size
@@ -16,11 +21,11 @@ class BehaviourNet(tf.keras.Model):
         self.e_decay = e_decay
 
         # construct sublayers
-        # embedding layer
-        self.tokenizer = Embedder(variable_input_size, attention_in_d)
+        # encoder
+        self.encoder = Encoder(attention_in_d, attention_heads, attention_out_ff, dropout_rate, variable_input_size)
 
-        # encoder layer
-        self.encoder = Encoder(attention_in_d, 8, q_layers[0], dropout_rate)
+        # encoding pooler
+        self.pooler = AttentionPooler(attention_in_d, pooler_layers)
 
         # Q subnet
         self.q_subnet = DQN(q_layers)
@@ -36,9 +41,9 @@ class BehaviourNet(tf.keras.Model):
             self.memory.append(experience)
         # or replace a pseudo-random memory if cap reached
         else:
-            self.memory[self.counter % self.capacity] = experience
+            self.memory[self.mem_counter % self.capacity] = experience
 
-        self.counter += 1
+        self.mem_counter += 1
 
     def sample_replay_batch(self, batch_size):
         if len(self.memory) > batch_size:
@@ -57,50 +62,26 @@ class BehaviourNet(tf.keras.Model):
             # return argmax_a q(s, a), rate at current step, indicator that action was not random
             return np.argmax(self(obs)), rate, True
 
-    @tf.function
-    def call(self, inputs: list[list[int]], **kwargs):
-        static_input = inputs[0]
+    def call(self, inputs: list[list[int]], training=True, attention_mask=None):
+        static_input = tf.expand_dims(tf.convert_to_tensor(inputs[0], dtype='float32'), axis=0)
         dynamic_inputs = inputs[1:]
 
-        # embed dynamic inputs
-        dynamic_inputs = [tf.convert_to_tensor(dynamic_input) for dynamic_input in dynamic_inputs]
-        for
+        # encode dynamic inputs
+        # first dynamic input is ego observed as if it were a npc for attention
+        dynamic_inputs = tf.convert_to_tensor(dynamic_inputs, dtype='float32')
 
+        encoded = self.encoder([dynamic_inputs[0], dynamic_inputs[1:]], training=training, mask=attention_mask)
 
+        pooled = self.pooler(encoded)
 
-        # static_input = inputs[0]
-        # dynamic_inputs = inputs[1:]
-        #
-        # # call phi networks
-        # # ASSUMPTION: dynamic inputs are passed in the same order as their equivalent phi networks
-        # phi_input = self.phi_networks[0][0](dynamic_inputs[0])
-        # for hidden_phi_layer in self.phi_networks[0][1]:
-        #     phi_input = hidden_phi_layer(phi_input)
-        #
-        # phi_outputs = phi_input
-        # phi_network = 0
-        # for input in range(1, len(dynamic_inputs)):
-        #     # call matching phi network to generate vector for pooling
-        #     # if we've reached a new type of input, switch to next phi network type
-        #     if len(dynamic_inputs[input]) != len(dynamic_inputs[input - 1]):
-        #         phi_network += 1
-        #
-        #     phi_input = self.phi_networks[phi_network][0](dynamic_inputs[input])
-        #     for hidden_phi_layer in self.phi_networks[0][1]:
-        #         phi_input = hidden_phi_layer(phi_input)
-        #
-        #     # pool phi outputs
-        #     phi_outputs = tf.add(phi_outputs, phi_input)
-        #
-        # # pass to rho
-        # rho_input = self.rho_input_layer(phi_outputs)
-        # rho_output = self.rho_output_layer(rho_input)
-        #
-        # # pass rho as dynamic input vector to Q
-        # q_input = self.input_layer(rho_input)
-        #
-        # for layer in self.hidden_layers:
-        #     q_input = layer(q_input)
-        #
-        # output = self.output_layer(q_input)
-        # return output
+        # call q network
+        if VERBOSE:
+            print("[?] static_input: ", static_input)
+            print("[?] encoded: ", pooled)
+
+        q_input = tf.concat([static_input, pooled], axis=1)
+
+        q_output = self.q_subnet(q_input)
+
+        # return distribution of choice weighting for actions
+        return q_output

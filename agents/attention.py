@@ -63,7 +63,6 @@ class AttentionPooler(tf.keras.layers.Layer):
         self.pooling_layers = [tf.keras.layers.Dense(layer, activation='relu') for layer in layer_params]
 
     def call(self, inputs):
-        print(inputs)
         inputs = tf.squeeze(inputs)
         outputs = []
 

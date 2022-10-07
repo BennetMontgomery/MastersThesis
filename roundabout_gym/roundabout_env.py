@@ -16,6 +16,7 @@ GOAL_REWARD = 10
 TIMESTEP_REWARD = -1
 ILLEGAL_LANE_CHANGE_REWARD = -1
 SPAWN_TIME_RANGE = 16
+EGO_IN_OBS = True
 
 
 class RoundaboutEnv(gym.Env):
@@ -89,7 +90,16 @@ class RoundaboutEnv(gym.Env):
         # inedge: 1 if on same edge else 0
         # intarget: 1 if on target link, else 0
         # insource: 1 if on a lane linking to the current target, else 0
-        vehicle_list = []
+        vehicle_list = [
+            {'ego': {
+                "speed": libsumo.vehicle_getSpeed(self.ego.agentid),
+                "laneid": libsumo.vehicle_getLaneIndex(self.ego.agentid),
+                "lanepos": libsumo.vehicle_getLanePosition(self.ego.agentid),
+                "inedge": 1,
+                "intarget": 0,
+                "insource": 1
+            }}
+        ] if EGO_IN_OBS else []
         for vehicle in self.ego.view:
             target_edges = [i[0] for i in libsumo.lane_getLinks(libsumo.vehicle_getLaneID(vehicle))]
 
@@ -260,7 +270,7 @@ class RoundaboutEnv(gym.Env):
                     self.ego.change_lane(self.target_lane)
             # punish illegal lane change attempt
             else:
-                reward -= ILLEGAL_LANE_CHANGE_REWARD
+                reward += ILLEGAL_LANE_CHANGE_REWARD
 
         elif behaviour == 1: # change lane right
             # sanity check: only change lanes if a lane exists
@@ -282,7 +292,7 @@ class RoundaboutEnv(gym.Env):
                     self.ego.change_lane(self.target_lane)
             # punish illegal lane change attempt
             else:
-                reward -= ILLEGAL_LANE_CHANGE_REWARD
+                reward += ILLEGAL_LANE_CHANGE_REWARD
         elif behaviour != 2: # follow leader does not require specific steering instructions
             raise ValueError("Incorrect first index action value")
 
