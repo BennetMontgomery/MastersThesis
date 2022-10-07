@@ -163,3 +163,6 @@ class Agent(ABC):
 
         if self.verbose:
             print(self.agentid + " sees " + str(self.view) + " at timestep " + str(libsumo.simulation_getTime()))
+
+    def set_network(self, new_net):
+        self.NETWORK = new_net

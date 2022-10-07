@@ -6,7 +6,7 @@ import os
 import random
 
 # Constants
-CONFIGS_PATH="../Sumoconfgs/"
+CONFIGS_PATH="./Sumoconfgs/"
 EGO_TYPE = ['"agenttype"', '"4.0"', '"7.0"', '"5"', '"30"', '"red"']
 NPC_TYPE = ['"npctype"', '"0.8"', '"5"', '"14"']
 MIN_NPCS = 3
@@ -16,12 +16,13 @@ GOAL_REWARD = 10
 TIMESTEP_REWARD = -1
 ILLEGAL_LANE_CHANGE_REWARD = -1
 SPAWN_TIME_RANGE = 16
+EGO_IN_OBS = True
 
 
 class RoundaboutEnv(gym.Env):
     metadata = {"render_modes" : ["sumo-gui", "cli"]}
 
-    def __init__(self, ego : Agent, render_mode: str = "cli"):
+    def __init__(self, ego: Agent, render_mode: str = "cli"):
         assert render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
 
@@ -61,41 +62,82 @@ class RoundaboutEnv(gym.Env):
         # laneid: current lane the vehicle is in
         # lanepos: current longitudinal lane position
         # dti: distance to next intersection
+        # lanes: adjacent lane data
+
+        lanes_available = [0, 0]
+
+        if libsumo.edge_getLaneNumber(libsumo.vehicle_getRoadID(self.ego.agentid)) > libsumo.vehicle_getLaneIndex(self.ego.agentid):
+            lanes_available[0] = 1
+
+        if libsumo.vehicle_getLaneIndex(self.ego.agentid) > 0:
+            lanes_available[1] = 1
+
         obs = {
             "number": len(self.ego.view),
             "speed": libsumo.vehicle_getSpeed(self.ego.agentid),
             "accel": libsumo.vehicle_getAcceleration(self.ego.agentid),
-            "laneid": libsumo.vehicle_getLaneID(self.ego.agentid),
+            "laneid": libsumo.vehicle_getLaneIndex(self.ego.agentid),
             "lanepos": libsumo.vehicle_getLanePosition(self.ego.agentid),
             "dti": libsumo.lane_getLength(libsumo.vehicle_getLaneID(self.ego.agentid))
-                   - libsumo.vehicle_getLanePosition(self.ego.agentid)
+                   - libsumo.vehicle_getLanePosition(self.ego.agentid),
+            "lanes": lanes_available
         }
 
         # append vehicle tokens
+        # speed: speed of vehicle
+        # lane id: lane index of vehicle
+        # lanepos: longitudinal lane position of vehicle in lane index
+        # inedge: 1 if on same edge else 0
+        # intarget: 1 if on target link, else 0
+        # insource: 1 if on a lane linking to the current target, else 0
+        vehicle_list = [
+            {'ego': {
+                "speed": libsumo.vehicle_getSpeed(self.ego.agentid),
+                "laneid": libsumo.vehicle_getLaneIndex(self.ego.agentid),
+                "lanepos": libsumo.vehicle_getLanePosition(self.ego.agentid),
+                "inedge": 1,
+                "intarget": 0,
+                "insource": 1
+            }}
+        ] if EGO_IN_OBS else []
         for vehicle in self.ego.view:
-            vehicle_dict = {vehicle + str(self.ego.view.index(vehicle)): {
+            target_edges = [i[0] for i in libsumo.lane_getLinks(libsumo.vehicle_getLaneID(vehicle))]
+
+            for i in range(len(target_edges)):
+                target_edges[i] = target_edges[i].split("_")[0]
+
+            vehicle_list.append({vehicle + str(self.ego.view.index(vehicle)): {
                 "speed": libsumo.vehicle_getSpeed(vehicle),
                 "laneid": libsumo.vehicle_getLaneIndex(vehicle),
-                "lanepos": libsumo.vehicle_getLanePosition(vehicle)
-            }}
+                "lanepos": libsumo.vehicle_getLanePosition(vehicle),
+                "inedge": 1 if libsumo.vehicle_getRoadID(vehicle) == libsumo.vehicle_getRoadID(self.ego.agentid) else 0,
+                "intarget": 1 if libsumo.vehicle_getRoadID(vehicle) ==
+                                libsumo.vehicle_getRoute(self.ego.agentid)[libsumo.vehicle_getRouteIndex(self.ego.agentid)+1] else 0,
+                "insource": 1 if libsumo.vehicle_getRoute(self.ego.agentid)[libsumo.vehicle_getRouteIndex(self.ego.agentid)+1]
+                                in target_edges else 0
+            }})
 
-            obs = obs | vehicle_dict
-
-        # append adjacent lane data
-        target_lanes = []
-        for lane in range(libsumo.edge_getLaneNumber(libsumo.vehicle_getRoadID(self.ego.agentid))):
-            if abs(lane - libsumo.vehicle_getLaneIndex(self.ego.agentid)) <= 1:
-                target_lanes.append(lane)
-
-        obs = obs | {"lanes": target_lanes}
-
+        if len(vehicle_list) > 0:
+            obs = obs | {"vehicles": vehicle_list}
 
         # append light data
+        light_list = []
         for light in libsumo.trafficlight_getIDList():
             if libsumo.vehicle_getLaneID(self.ego.agentid) is libsumo.trafficlight_getControlledLanes(light):
-                light_dict = {light: libsumo.trafficlight_getRedYellowGreenState(light)}
+                if libsumo.trafficlight_getRedYellowGreenState(light) in ['r', 'u']:
+                    light_val = 0
+                elif libsumo.trafficlight_getRedYellowGreenState(light) in ['y', 'Y']:
+                    light_val = 1
+                elif libsumo.trafficlight_getRedYellowGreenState(light) in ['g', 'G']:
+                    light_val = 2
+                else:
+                    light_val = None # traffic light is off and is functionally a stop sign
 
-                obs | light_dict
+                if light_val is not None:
+                    light_list.append({light: light_val})
+
+        if len(light_list) > 0:
+            obs = obs | {"lights": light_list}
 
         return obs
 
@@ -228,7 +270,7 @@ class RoundaboutEnv(gym.Env):
                     self.ego.change_lane(self.target_lane)
             # punish illegal lane change attempt
             else:
-                reward -= ILLEGAL_LANE_CHANGE_REWARD
+                reward += ILLEGAL_LANE_CHANGE_REWARD
 
         elif behaviour == 1: # change lane right
             # sanity check: only change lanes if a lane exists
@@ -250,7 +292,7 @@ class RoundaboutEnv(gym.Env):
                     self.ego.change_lane(self.target_lane)
             # punish illegal lane change attempt
             else:
-                reward -= ILLEGAL_LANE_CHANGE_REWARD
+                reward += ILLEGAL_LANE_CHANGE_REWARD
         elif behaviour != 2: # follow leader does not require specific steering instructions
             raise ValueError("Incorrect first index action value")
 
@@ -279,6 +321,8 @@ class RoundaboutEnv(gym.Env):
 
         return self._get_obs(), reward, False, None
 
+    def sample(self):
+        return self._get_obs()
 
     def render(self):
         pass

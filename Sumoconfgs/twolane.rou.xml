@@ -4,27 +4,19 @@
     <vType id="npctype" accel="0.8" sigma="0.5" length="5"/>
 
     <vehicle id="agent" type="agenttype" depart="0">
-        <route edges="E3 E-2"/>
-    </vehicle>
-
-    <vehicle id="npc0" type="npctype" depart="2">
         <route edges="E3 E-3"/>
     </vehicle>
 
-    <vehicle id="npc1" type="npctype" depart="6">
-        <route edges="E2 E-2"/>
-    </vehicle>
-
-    <vehicle id="npc2" type="npctype" depart="11">
-        <route edges="E1 E-3"/>
-    </vehicle>
-
-    <vehicle id="npc3" type="npctype" depart="14">
-        <route edges="RE2 E-1"/>
-    </vehicle>
-
-    <vehicle id="npc4" type="npctype" depart="15">
+    <vehicle id="npc0" type="npctype" depart="3">
         <route edges="RE1 E-2"/>
+    </vehicle>
+
+    <vehicle id="npc1" type="npctype" depart="9">
+        <route edges="RE2 E-3"/>
+    </vehicle>
+
+    <vehicle id="npc2" type="npctype" depart="13">
+        <route edges="RE1 E-1"/>
     </vehicle>
 
 </routes>
