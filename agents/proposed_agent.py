@@ -1,17 +1,18 @@
 # IMPORTS
+import os
+
 import tensorflow as tf
 import numpy as np
-import random
-import math
+import matplotlib.pyplot as plt
 from agents.agent import Agent
 from roundabout_gym.roundabout_env import RoundaboutEnv
 from collections import namedtuple
 from datetime import datetime
 from agents.behaviour_net import BehaviourNet
-from agents.dqn import DQN
 
 # CONSTANTS
 SAVE_MODEL = False
+MODEL_DIR = "~/Documents/labs/thesis/simulator/models"
 
 class ProposedAgent(Agent):
     def __init__(self, agentid, network, LANEUNITS=0.5, MAX_DECEL=7, MAX_ACCEL=4, verbose=False, VIEW_DISTANCE=30):
@@ -20,6 +21,15 @@ class ProposedAgent(Agent):
         # predeclared variables
         self.behaviour_net = None
         self.throttle_net = None
+        self.throttle_path = None
+        self.behaviour_path = None
+
+    def save_model(self, model, model_name):
+        os.system(f"mkdir -p {MODEL_DIR}")
+        model.save(f"{MODEL_DIR}/{model_name}")
+
+    def load_model(self, model):
+        return tf.keras.models.load_model(f"{MODEL_DIR}/{model}")
 
     def flatten_obs(self, env_obs):
         # flatten observations to something passable to tensorflow
@@ -29,12 +39,6 @@ class ProposedAgent(Agent):
         if "vehicles" in env_obs.keys():
             for vehicle in env_obs["vehicles"]:
                 obs.append([vehicle[keya][keyb] for keya in vehicle.keys() for keyb in vehicle[keya]])
-
-        # lights = []
-        #
-        # if "lights" in env_obs.keys():
-        #     for light in env_obs["lights"]:
-        #         lights.append(np.array([light[key] for key in light.keys()]))
 
         # return static vector followed by dynamic array observation vector
         return obs
@@ -160,7 +164,7 @@ class ProposedAgent(Agent):
                 b_action, _, _ = self.behaviour_net.select_action(obs, step)
                 # add selected behaviour to observation to pass to throttle net
                 t_obs = obs.copy()
-                t_obs[0].append(b_action)
+                t_obs[0].append(float(b_action))
 
                 # select throttle action
                 t_action, _, _ = self.throttle_net.select_action(obs, step)
@@ -194,14 +198,14 @@ class ProposedAgent(Agent):
 
                     # UPDATE BEHAVIOUR NETWORK
                     # calculate loss and apply gradient descent
-                    q_prime = np.max(self.target_behaviour_net(np.atleast_2d(behaviour_state_primes)), axis=1)
+                    q_prime = np.max(self.target_behaviour_net(behaviour_state_primes, training=True), axis=1)
                     q_optimal = np.where(behaviour_terminates, behaviour_rewards, behaviour_rewards + gamma*q_prime)
                     q_optimal = tf.convert_to_tensor(q_optimal, dtype='float32')
                     with tf.GradientTape() as tape:
                         q = tf.math.reduce_sum(
-                            self.behaviour_net(np.atleast_2d(self.behaviour_net(behaviour_states)).astype('float32')) *
-                                               tf.one_hot(behaviour_actions, b_action_space_size), axis=1)
-                        loss = tf.math.reduce_mean(tf.square(tf.square(q_optimal - q)))
+                            self.behaviour_net(behaviour_states, training=True).astype('float32')
+                            * tf.one_hot(behaviour_actions, b_action_space_size), axis=1)
+                        loss = tf.math.reduce_mean(tf.square(q_optimal - q))
 
                     # Update using ADAM
                     variables = self.behaviour_net.trainable_variables
@@ -210,12 +214,128 @@ class ProposedAgent(Agent):
 
                     # record loss
                     b_loss_history.append(loss.numpy())
+
+                    # UPDATE THROTTLE NETWORK
+                    # calculate loss and apply gradient descent
+                    q_prime = np.max(self.target_throttle_net(throttle_state_primes, training=True), axis=1)
+                    q_optimal = np.where(throttle_terminates, throttle_rewards, throttle_rewards + gamma * q_prime)
+                    q_optimal = tf.convert_to_tensor(q_optimal, dtype='float32')
+                    with tf.GradientTape() as tape:
+                        q = tf.math.reduce_sum(
+                            self.throttle_net(throttle_states, training=True).astype('float32')
+                            * tf.one_hot(throttle_actions, t_action_space_size), axis=1)
+                        loss = tf.math.reduce_mean(tf.square(q_optimal - q))
+
+                    # Update using ADAM
+                    variables = self.throttle_net.trainable_variables
+                    gradients = tape.gradient(loss, variables)
+                    optimizer.apply_gradients(zip(gradients, variables))
+
+                    # record loss
+                    t_loss_history.append(loss.numpy())
                 else:
                     b_loss_history.append(0)
                     t_loss_history.append(0)
 
+                # update target networks
+                if step % update_freq_b == 0:
+                    behaviour_params = self.behaviour_net.trainable_variables
+                    optimal_params = self.target_behaviour_net.trainable_variables
 
-    def select_action(self, time_step):
+                    for bvar, ovar in zip(behaviour_params, optimal_params):
+                        ovar.assign(bvar.numpy())
+
+                if step % update_freq_t == 0:
+                    throttle_params = self.throttle_net.trainable_variables
+                    optimal_params = self.target_throttle_net.trainable_variables
+
+                    for tvar, ovar in zip(throttle_params, optimal_params):
+                        ovar.assign(tvar.numpy())
+
+                # new episode if a terminal state is reached
+                if terminated:
+                    break
+
+            reward_history[episode] = episode_return
+            average_reward = reward_history[max(0, episode - 100):(episode+1)].mean()
+
+            if episode % log_freq == 0:
+                print(f"Episode: {episode} Episode Reward: {episode_return} P100 Average Reward: {average_reward}")
+
+        if SAVE_MODEL:
+            time = datetime.now()
+
+            self.throttle_folder = f"Throttle_{time}"
+            self.behaviour_folder = f"Behaviour_{time}"
+
+            self.save_model(self.throttle_net, self.throttle_folder)
+            self.save_model(self.behaviour_net, self.behaviour_folder)
+
+            average_reward = [reward_history[max(0, episode-100):(episode+1)].mean() for episode in range(episodes)]
+
+            plt.plot(reward_history)
+            plt.title(f"{datetime.now}")
+            plt.savefig(f"{MODEL_DIR}/{time}.png")
+
+            plt.plot(average_reward)
+            plt.title(f"{time} average over time")
+            plt.savefig(f"{MODEL_DIR}/{time} average.png")
+            plt.close()
+
+        self.test_env.close()
+
+    def validate(self, throttle_model=None, behaviour_model=None, write_to_file=True, eval_eps=1):
+        throttle = self.load_model(throttle_model) if throttle_model is not None else self.throttle_net
+        behaviour = self.load_model(behaviour_model) if behaviour_model is not None else self.behaviour_net
+
+        self.eval_env = RoundaboutEnv(self)
+        returns = []
+        terminated = False
+
+        for episode in range(eval_eps):
+            curr_state = self.eval_env.reset()
+            episode_return = 0
+
+            while not terminated:
+                b_action = np.argmax(behaviour(curr_state))
+                t_obs = curr_state.copy()
+                t_obs[0].append(float(b_action))
+                t_action = np.argmax(throttle(t_obs))
+
+                # apply action
+                next_state, reward, terminated = self.eval_env.step([b_action, t_action])
+
+                # record reward
+                episode_return += reward
+
+                if terminated:
+                    returns.append(episode_return)
+                    break
+
+                curr_state = next_state
+
+        self.eval_env.close()
+
+        if write_to_file:
+            f = open(f"{MODEL_DIR}/{datetime.now()}.log", "w")
+            f.write(f"Average: {np.sum(returns)/len(returns)}\n")
+
+            for episode in range(len(returns)):
+                f.write(f"Validation Episode: {episode} Episode Return: {returns[episode]}\n")
+
+            f.close()
+
+        return np.sum(returns)/len(returns)
+
+    def select_action(self, time_step: list[list[float]]):
         # actions may not be selected without training
         if (self.throttle_net is None) or (self.behaviour_net is None):
             raise RuntimeError("[!!] Throttle net and Behaviour net must be trained or loaded before calling select_action.")
+
+        # call behaviour and throttle networks, collect actions
+        b_action = np.argmax(self.behaviour_net(time_step, training=False))
+        t_obs = time_step.copy()
+        t_obs[0].append(float(b_action))
+        t_action = np.argmax(self.throttle_net(time_step, training=False))
+
+        return [b_action, t_action]
