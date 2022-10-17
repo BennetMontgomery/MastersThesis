@@ -1,16 +1,19 @@
 # IMPORTS
 import tensorflow as tf
 
-
 class DQN(tf.keras.layers.Layer):
-    def __init__(self, layer_params):
+    def __init__(self, layer_params, input_s):
         super(DQN, self).__init__()
 
-        self.input_layer = tf.keras.layers.Dense(layer_params[0], activation='relu')
+        self.input_s = input_s
+
+        self.input_layer = tf.keras.layers.Dense(layer_params[0], input_shape=input_s, activation='relu')
         self.hidden_layers = [tf.keras.layers.Dense(layer, activation='relu') for layer in layer_params[1:-1]]
         self.output_layer = tf.keras.layers.Dense(layer_params[-1], activation='linear')
 
     def call(self, inputs):
+        inputs = tf.reshape(inputs, [shape for shape in self.input_s])
+
         input = self.input_layer(inputs)
         for layer in self.hidden_layers:
             input = layer(input)

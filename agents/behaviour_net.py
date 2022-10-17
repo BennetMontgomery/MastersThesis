@@ -5,6 +5,7 @@ import tensorflow as tf
 import numpy as np
 from agents.attention import Encoder, AttentionPooler
 from agents.dqn import DQN
+from parameters.simulator_params import maximum_npcs
 
 # CONSTANTS
 VERBOSE = False
@@ -18,17 +19,23 @@ class BehaviourNet(tf.keras.Model):
 
         self.variable_input_size = variable_input_size
         self.static_input_size = static_input_size
+        self.attention_in_d = attention_in_d
         self.e_decay = e_decay
 
         # construct sublayers
+        self.input_layer = tf.keras.layers.InputLayer(input_shape=(maximum_npcs+1,static_input_size))
+
         # encoder
         self.encoder = Encoder(attention_in_d, attention_heads, attention_out_ff, dropout_rate, variable_input_size)
 
         # encoding pooler
-        self.pooler = AttentionPooler(attention_in_d, pooler_layers)
+        self.pooler = AttentionPooler(attention_in_d, pooler_layers, input_s=(variable_input_size, attention_in_d))
+
+        # static embedder
+        self.static_embedder = tf.keras.layers.Embedding(200, attention_in_d, mask_zero=True)
 
         # Q subnet
-        self.q_subnet = DQN(q_layers)
+        self.q_subnet = DQN(q_layers, input_s=(1,(static_input_size+1)*attention_in_d))
 
         # build memory buffer
         self.memory_cap = memory_cap
@@ -64,22 +71,32 @@ class BehaviourNet(tf.keras.Model):
 
     def call(self, inputs: list[list[int]], training=True, attention_mask=None):
         static_input = tf.expand_dims(tf.convert_to_tensor(inputs[0], dtype='float32'), axis=0)
-        dynamic_inputs = inputs[1:]
+        dynamic_inputs = tf.convert_to_tensor(inputs[1:], dtype='float32')
+
+        static_input = self.static_embedder(static_input)
 
         # encode dynamic inputs
-        # first dynamic input is ego observed as if it were a npc for attention
-        dynamic_inputs = tf.convert_to_tensor(dynamic_inputs, dtype='float32')
+        encoded = tf.squeeze(self.encoder(dynamic_inputs, training=training, mask=attention_mask))
 
-        encoded = self.encoder([dynamic_inputs[0], dynamic_inputs[1:]], training=training, mask=attention_mask)
-
-        pooled = self.pooler(encoded)
+        pooled = tf.expand_dims(tf.expand_dims(self.pooler(encoded), axis=0), axis=0)
 
         # call q network
         if VERBOSE:
             print("[?] static_input: ", static_input)
             print("[?] encoded: ", pooled)
 
-        q_input = tf.concat([static_input, pooled], axis=1)
+
+        # if another vehicle is present
+        if len(dynamic_inputs) > 1:
+            q_input = tf.reshape(tf.concat([static_input, pooled], axis=1), [1, (self.static_input_size+1) * self.attention_in_d])
+        # otherwise
+        else:
+            dyn_vec = tf.constant([[[0 for _ in range(self.attention_in_d)]]], dtype='float32')
+
+            q_input = tf.reshape(tf.concat([static_input, dyn_vec], axis=1), [1, (self.static_input_size+1)*self.attention_in_d])
+
+        if VERBOSE:
+            print("[?] q_input: ", q_input)
 
         q_output = self.q_subnet(q_input)
 

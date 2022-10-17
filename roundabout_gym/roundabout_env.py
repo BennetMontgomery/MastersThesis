@@ -1,6 +1,7 @@
 import gym
 from gym import spaces
 from agents.agent import Agent
+from parameters.simulator_params import *
 import libsumo
 import os
 import random
@@ -9,13 +10,14 @@ import random
 CONFIGS_PATH="./Sumoconfgs/"
 EGO_TYPE = ['"agenttype"', '"4.0"', '"7.0"', '"5"', '"30"', '"red"']
 NPC_TYPE = ['"npctype"', '"0.8"', '"5"', '"14"']
-MIN_NPCS = 3
-MAX_NPCS = 6
-COLLISION_REWARD = -10
-GOAL_REWARD = 10
-TIMESTEP_REWARD = -1
-ILLEGAL_LANE_CHANGE_REWARD = -1
-SPAWN_TIME_RANGE = 16
+MIN_NPCS = minimum_npcs
+MAX_NPCS = maximum_npcs
+COLLISION_REWARD = collision_reward
+GOAL_REWARD = goal_reward
+TIMESTEP_REWARD = time_step_reward
+ILLEGAL_LANE_CHANGE_REWARD = illegal_lane_change_reward
+SPAWN_TIME_RANGE = spawn_time_range
+EXIT_REWARD = exit_reward
 EGO_IN_OBS = True
 
 
@@ -27,6 +29,10 @@ class RoundaboutEnv(gym.Env):
         self.render_mode = render_mode
 
         self.ego = ego # object reference to the ego agent
+
+        self.ego_last_edge = None
+        self.ego_goal = None
+        self.prev_obs = None
 
         # Observations are
         # self.observation_space = spaces.Dict(
@@ -71,6 +77,8 @@ class RoundaboutEnv(gym.Env):
 
         if libsumo.vehicle_getLaneIndex(self.ego.agentid) > 0:
             lanes_available[1] = 1
+
+        self.ego_last_edge = libsumo.vehicle_getRoadID(self.ego.agentid)
 
         obs = {
             "number": len(self.ego.view),
@@ -169,8 +177,12 @@ class RoundaboutEnv(gym.Env):
 
         # always select a starting edge pointing towards a roundabout
         start_edge = random.choice([edge for edge in edges if "-" not in edge and "R" not in edge])
+        self.ego_last_edge = start_edge
+
         # select a finishing edge pointing away from the roundabout
         finish_edge = random.choice([edge for edge in edges if "-" in edge])
+        self.ego_goal = finish_edge
+
         ego_type_line = '<vType id={ID} accel={ACCEL} emergencyDecel={EDECEL} sigma="0" length={LENGTH} maxspeed={MAX} color={COLOUR}/>'.format(
             ID = EGO_TYPE[0], ACCEL = EGO_TYPE[1], EDECEL = EGO_TYPE[2], LENGTH = EGO_TYPE[3], MAX = EGO_TYPE[4], COLOUR = EGO_TYPE[5]
         )
@@ -229,7 +241,8 @@ class RoundaboutEnv(gym.Env):
         libsumo.simulationStep()
 
         # build initial observation
-        return self._get_obs()
+        self.prev_obs = self._get_obs()
+        return self.prev_obs
 
 
     def step(self, action):
@@ -242,6 +255,8 @@ class RoundaboutEnv(gym.Env):
         # extract low level throttle decision
         throttle = action[1]
 
+        print(f"Behaviour: {behaviour} Throttle: {throttle}")
+
         # reroute vehicles appearing at this time step
         for i in range(len(self.npc_depart_times)):
             if self.npc_depart_times[i] == libsumo.simulation_getTime():
@@ -251,7 +266,7 @@ class RoundaboutEnv(gym.Env):
         # apply behaviour decision
         if behaviour == 0: # change lane left
             # sanity check: only change lanes if a lane exists
-            if libsumo.edge_getLaneNumber(libsumo.vehicle_getLaneIndex(self.ego.agentid)) - 1 \
+            if libsumo.edge_getLaneNumber(libsumo.vehicle_getRoadID(self.ego.agentid)) - 1 \
                     > libsumo.vehicle_getLaneIndex(self.ego.agentid):
                 # continue in progress lane change
                 if self.changing_lanes:
@@ -265,8 +280,8 @@ class RoundaboutEnv(gym.Env):
                 # if no lange change in progress, initiate lane change
                 else:
                     self.changing_lanes = True
-                    self.source_lane = libsumo.edge_getLaneNumber(libsumo.vehicle_getLaneIndex(self.ego.agentid))
-                    self.target_lane = libsumo.edge_getLaneNumber(libsumo.vehicle_getLaneIndex(self.ego.agentid)) + 1
+                    self.source_lane = libsumo.vehicle_getLaneIndex(self.ego.agentid)
+                    self.target_lane = libsumo.vehicle_getLaneIndex(self.ego.agentid) + 1
                     self.ego.change_lane(self.target_lane)
             # punish illegal lane change attempt
             else:
@@ -287,8 +302,8 @@ class RoundaboutEnv(gym.Env):
                 # if no lange change in progress, initiate lane change
                 else:
                     self.changing_lanes = True
-                    self.source_lane = libsumo.edge_getLaneNumber(libsumo.vehicle_getLaneIndex(self.ego.agentid))
-                    self.target_lane = libsumo.edge_getLaneNumber(libsumo.vehicle_getLaneIndex(self.ego.agentid)) - 1
+                    self.source_lane = libsumo.vehicle_getLaneIndex(self.ego.agentid)
+                    self.target_lane = libsumo.vehicle_getLaneIndex(self.ego.agentid) - 1
                     self.ego.change_lane(self.target_lane)
             # punish illegal lane change attempt
             else:
@@ -310,16 +325,22 @@ class RoundaboutEnv(gym.Env):
         if self.ego.agentid in libsumo.simulation_getCollidingVehiclesIDList():
             # penalty for colliding with other vehicles
             reward += COLLISION_REWARD
-            return self._get_obs(), reward, True, None
-        elif self.ego.agentid not in libsumo.vehicle_getIDList():
+            return self.prev_obs, reward, True, None
+        elif self.ego.agentid not in libsumo.vehicle_getIDList() and self.ego_goal == self.ego_last_edge:
             # reward for succesfully exiting goal state
             reward += GOAL_REWARD
-            return self._get_obs(), reward, True, None
+            return self.prev_obs, reward, True, None
+        elif self.ego.agentid not in libsumo.vehicle_getIDList():
+            # reward for exiting system without reaching goal
+            reward += EXIT_REWARD
+            return self.prev_obs, reward, True, None
 
         # apply timestep penalty
         reward += TIMESTEP_REWARD
 
-        return self._get_obs(), reward, False, None
+        self.prev_obs = self._get_obs()
+
+        return self.prev_obs, reward, False, None
 
     def sample(self):
         return self._get_obs()

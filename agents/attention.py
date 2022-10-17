@@ -1,12 +1,12 @@
 import tensorflow as tf
-
+from parameters.simulator_params import maximum_npcs
 
 class Encoder(tf.keras.layers.Layer):
     def __init__(self, attention_layer_width, num_heads, feed_forward_params, rate, agent_len, in_range=200):
         super(Encoder, self).__init__()
 
         self.attention_layer_width = attention_layer_width
-        self.embedder = tf.keras.layers.Embedding(in_range, attention_layer_width)
+        self.embedder = tf.keras.layers.Embedding(in_range, attention_layer_width, mask_zero=True)
         self.agent_len = agent_len
 
         self.multi_head = tf.keras.layers.MultiHeadAttention(
@@ -14,6 +14,7 @@ class Encoder(tf.keras.layers.Layer):
             key_dim=attention_layer_width,
             dropout=rate
         )
+
         self.feed_forward = tf.keras.Sequential([
             tf.keras.layers.Dense(feed_forward_params, activation='relu'),
             tf.keras.layers.Dense(attention_layer_width)
@@ -26,15 +27,12 @@ class Encoder(tf.keras.layers.Layer):
         self.dropout_feedforward = tf.keras.layers.Dropout(rate)
 
     def call(self, agents, training=True, mask=None):
-        npc_embedding = tf.reshape(self.embedder(agents[1]), [len(agents[1]) * self.agent_len, self.attention_layer_width])
-        ego_embedding = self.embedder(agents[0])
-        # project ego_embedding to match npc_embedding batchsize (required by keras)
-        ego_embedding = tf.repeat(tf.expand_dims(tf.reduce_sum(ego_embedding, 0), axis=0), [len(npc_embedding)], axis=0)
+        ego_embedding = self.embedder(tf.convert_to_tensor(agents[0]))
+        npc_embedding = self.embedder(tf.convert_to_tensor(agents[1:]))
 
-        # batchify input
+        # batchify
+        ego_embedding = tf.expand_dims(tf.expand_dims(ego_embedding, axis=0), axis=0)
         npc_embedding = tf.expand_dims(npc_embedding, axis=0)
-        ego_embedding = tf.expand_dims(ego_embedding, axis=0)
-
 
         attention = self.multi_head(
             query=ego_embedding,
@@ -54,12 +52,12 @@ class Encoder(tf.keras.layers.Layer):
 
 
 class AttentionPooler(tf.keras.layers.Layer):
-    def __init__(self, attention_layer_width, layer_params):
+    def __init__(self, attention_layer_width, layer_params, input_s):
         super(AttentionPooler, self).__init__()
 
         self.attention_layer_width = attention_layer_width
 
-        self.pooler_input = tf.keras.layers.Dense(attention_layer_width, activation='relu')
+        self.pooler_input = tf.keras.layers.Dense(attention_layer_width, input_shape=input_s, activation='relu')
         self.pooling_layers = [tf.keras.layers.Dense(layer, activation='relu') for layer in layer_params]
 
     def call(self, inputs):
@@ -76,6 +74,6 @@ class AttentionPooler(tf.keras.layers.Layer):
 
             outputs.append(output)
 
-        pooled = tf.reduce_sum(tf.convert_to_tensor(outputs), axis=0)
+        pooled = tf.reduce_sum(tf.reduce_sum(tf.reduce_sum(tf.convert_to_tensor(outputs), axis=1), axis=0), axis=0)
 
         return pooled

@@ -9,6 +9,8 @@ from roundabout_gym.roundabout_env import RoundaboutEnv
 from collections import namedtuple
 from datetime import datetime
 from agents.behaviour_net import BehaviourNet
+from parameters.simulator_params import maximum_npcs
+from parameters.hyperparameters import variable_input_size, static_input_size
 
 # CONSTANTS
 SAVE_MODEL = False
@@ -33,23 +35,28 @@ class ProposedAgent(Agent):
 
     def flatten_obs(self, env_obs):
         # flatten observations to something passable to tensorflow
-        obs = [[env_obs["number"], env_obs["speed"], env_obs["accel"], env_obs["laneid"],
-                           env_obs["lanepos"], env_obs["dti"], env_obs["lanes"][0], env_obs["lanes"][1]]]
+        obs = [[-1 if it == 0 else it for it in [env_obs["number"], env_obs["speed"], env_obs["accel"], env_obs["laneid"],
+                           env_obs["lanepos"], env_obs["dti"], env_obs["lanes"][0], env_obs["lanes"][1]]]]
 
+        # populate dynamic observation vector
         if "vehicles" in env_obs.keys():
             for vehicle in env_obs["vehicles"]:
-                obs.append([vehicle[keya][keyb] for keya in vehicle.keys() for keyb in vehicle[keya]])
+                obs.append([-1 if it == 0 else it for it in [vehicle[keya][keyb] for keya in vehicle.keys() for keyb in vehicle[keya]]])
+
+        # pad dynamic observation vector
+        for i in range(len(obs[1:]), maximum_npcs):
+            obs.append([0 for _ in range(static_input_size)])
+
+        for vec in obs:
+            for i in range(len(vec), static_input_size):
+                vec.append(0)
 
         # return static vector followed by dynamic array observation vector
         return obs
 
-    def train_nets(self):
+    def train_nets(self, episodes=2000, replay_cap=8000, batch_size=32):
         # UNIVERSAL HYPERPARAMS
-        batch_size = 32 # replay memory sample size
         gamma = 0.9 # reward discount factor
-        update_freq_t = 25 # number of rounds between updates to the target q tnet
-        replay_cap = 8000 # maximum number of experience objects to store in memory
-        episodes = 2000 # rounds of training
         log_freq = 1 # number of rounds between printing of loss and other ML statistics
         alpha = 0.001 # learning rate
         optimizer = tf.optimizers.Adam(alpha)
@@ -82,8 +89,8 @@ class ProposedAgent(Agent):
 
         # CREATE NETWORKS
         self.behaviour_net = BehaviourNet(
-            static_input_size=8,
-            variable_input_size=4,
+            static_input_size=static_input_size,
+            variable_input_size=variable_input_size,
             attention_heads=num_heads_b,
             q_layers=b_q_layers,
             pooler_layers=pooler_layers_b,
@@ -94,8 +101,8 @@ class ProposedAgent(Agent):
         )
 
         self.target_behaviour_net = BehaviourNet(
-            static_input_size=8,
-            variable_input_size=4,
+            static_input_size=static_input_size,
+            variable_input_size=variable_input_size,
             attention_heads=num_heads_b,
             q_layers=b_q_layers,
             pooler_layers=pooler_layers_b,
@@ -106,8 +113,8 @@ class ProposedAgent(Agent):
         )
 
         self.throttle_net = BehaviourNet(
-            static_input_size=8,
-            variable_input_size=4,
+            static_input_size=static_input_size,
+            variable_input_size=variable_input_size,
             attention_heads=num_heads_t,
             q_layers=t_q_layers,
             pooler_layers=pooler_layers_t,
@@ -118,8 +125,8 @@ class ProposedAgent(Agent):
         )
 
         self.target_throttle_net = BehaviourNet(
-            static_input_size=8+1,
-            variable_input_size=4,
+            static_input_size=static_input_size+1,
+            variable_input_size=variable_input_size,
             attention_heads=num_heads_t,
             q_layers=t_q_layers,
             pooler_layers=pooler_layers_t,
@@ -129,24 +136,28 @@ class ProposedAgent(Agent):
             e_decay=e_decay_t
         )
 
-        # ensure starting equality of networks
-        policy_params = self.behaviour_net.trainable_variables
-        target_params = self.target_behaviour_net.trainable_variables
-
-        for pvar, tvar in zip(policy_params, target_params):
-            tvar.assign(pvar.numpy())
-
-        policy_params = self.throttle_net.trainable_variables
-        target_params = self.target_throttle_net.trainable_variables
-
-        for pvar, tvar in zip(policy_params, target_params):
-            tvar.assign(pvar.numpy())
+        print(self.behaviour_net.layers)
+        print(self.throttle_net.layers)
 
         # track reward history
         reward_history = np.empty(episodes)
 
         # train
         for episode in range(episodes):
+            if episode == 1:
+                # ensure starting equality of networks
+                policy_params = self.behaviour_net.trainable_variables
+                target_params = self.target_behaviour_net.trainable_variables
+
+                for pvar, tvar in zip(policy_params, target_params):
+                    tvar.assign(pvar.numpy())
+
+                policy_params = self.throttle_net.trainable_variables
+                target_params = self.target_throttle_net.trainable_variables
+
+                for pvar, tvar in zip(policy_params, target_params):
+                    tvar.assign(pvar.numpy())
+
             self.test_env.reset()
 
             # generic training variables
@@ -158,10 +169,16 @@ class ProposedAgent(Agent):
 
             while not terminated:
                 obs = self.test_env.sample()
+                obs = self.flatten_obs(obs)
                 step += 1
 
                 # select behaviour according to e-greedy policy
-                b_action, _, _ = self.behaviour_net.select_action(obs, step)
+                try:
+                    b_action, _, _ = self.behaviour_net.select_action(obs, step)
+                except tf.python.framework.errors_impl.InvalidArgumentError:
+                    print(obs)
+                    exit(1)
+
                 # add selected behaviour to observation to pass to throttle net
                 t_obs = obs.copy()
                 t_obs[0].append(float(b_action))
@@ -170,7 +187,7 @@ class ProposedAgent(Agent):
                 t_action, _, _ = self.throttle_net.select_action(obs, step)
 
                 # apply action to environment
-                state_prime, reward, terminated = self.test_env.step([b_action, t_action])
+                state_prime, reward, terminated, _ = self.test_env.step([b_action, t_action])
                 episode_return += reward
 
                 # store experience in replay buffers
