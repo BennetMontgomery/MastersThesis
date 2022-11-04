@@ -1,5 +1,4 @@
 import tensorflow as tf
-from parameters.simulator_params import maximum_npcs
 
 class Encoder(tf.keras.layers.Layer):
     def __init__(self, attention_layer_width, num_heads, feed_forward_params, rate, agent_len, in_range=200):
@@ -27,12 +26,19 @@ class Encoder(tf.keras.layers.Layer):
         self.dropout_feedforward = tf.keras.layers.Dropout(rate)
 
     def call(self, agents, training=True, mask=None):
-        ego_embedding = self.embedder(tf.convert_to_tensor(agents[0]))
-        npc_embedding = self.embedder(tf.convert_to_tensor(agents[1:]))
+        # ego_embedding = self.embedder(tf.convert_to_tensor(agents[0]))
+        # npc_embedding = self.embedder(tf.convert_to_tensor(agents[1:]))
+        ego_embedding = self.embedder(tf.expand_dims(tf.convert_to_tensor([obs[0] for obs in agents]),axis=1))
+        npc_embedding = self.embedder(tf.convert_to_tensor([obs[1:] for obs in agents]))
+
 
         # batchify
-        ego_embedding = tf.expand_dims(tf.expand_dims(ego_embedding, axis=0), axis=0)
-        npc_embedding = tf.expand_dims(npc_embedding, axis=0)
+        # if tf.rank(npc_embedding) < 4:
+        #     ego_embedding = tf.expand_dims(tf.expand_dims(ego_embedding, axis=0), axis=0)
+        #     npc_embedding = tf.expand_dims(npc_embedding, axis=0)
+        # else:
+        #     # batched by batch sampling already
+        #     ego_embedding = tf.repeat(tf.expand_dims(ego_embedding, axis=0), tf.shape(npc_embedding)[0], axis=0)
 
         attention = self.multi_head(
             query=ego_embedding,
@@ -52,28 +58,44 @@ class Encoder(tf.keras.layers.Layer):
 
 
 class AttentionPooler(tf.keras.layers.Layer):
-    def __init__(self, attention_layer_width, layer_params, input_s):
+    def __init__(self, attention_layer_width, layer_param, static_input_size):
         super(AttentionPooler, self).__init__()
 
         self.attention_layer_width = attention_layer_width
 
-        self.pooler_input = tf.keras.layers.Dense(attention_layer_width, input_shape=input_s, activation='relu')
-        self.pooling_layers = [tf.keras.layers.Dense(layer, activation='relu') for layer in layer_params]
+        self.pooler = tf.keras.Sequential([
+            tf.keras.layers.Dense(attention_layer_width, input_shape=(static_input_size,attention_layer_width), activation='relu'),
+            tf.keras.layers.Dense(layer_param)
+        ])
+
+        # self.pooler_input = tf.keras.layers.Dense(attention_layer_width, input_shape=input_s, activation='relu')
+        # self.pooling_layers = [tf.keras.layers.Dense(layer, activation='relu') for layer in layer_params]
 
     def call(self, inputs):
-        inputs = tf.squeeze(inputs)
+        # inputs = tf.squeeze(inputs)
         outputs = []
 
-        for tensor in inputs:
-            batch = tf.expand_dims(tensor, axis=0)
+        for batch in inputs:
+            output_batch = []
+            for tensor in batch:
+                output = self.pooler(tf.expand_dims(tensor, axis=0))
+                output_batch.append(output)
 
-            output = self.pooler_input(batch)
+            pooled = tf.squeeze(tf.reduce_sum(output_batch, axis=0))
+            outputs.append(pooled)
+            # # if tf.rank(tensor) < 3:
+            # #     tensor = tf.expand_dims(tensor, axis=0)
+            #
+            # output = self.pooler(tensor)
+            #
+            # # output = self.pooler_input(batch)
+            # #
+            # # for layer in self.pooling_layers:
+            # #     output = layer(output)
+            #
+            # outputs.append(output)
 
-            for layer in self.pooling_layers:
-                output = layer(output)
+        # pooled = tf.reduce_sum(tf.reduce_sum(tf.reduce_sum(tf.convert_to_tensor(outputs), axis=1), axis=0), axis=0)
+        # pooled = tf.expand_dims(tf.reduce_sum(tf.reduce_sum(tf.convert_to_tensor(outputs), axis=1), axis=0), axis=0)
 
-            outputs.append(output)
-
-        pooled = tf.reduce_sum(tf.reduce_sum(tf.reduce_sum(tf.convert_to_tensor(outputs), axis=1), axis=0), axis=0)
-
-        return pooled
+        return tf.convert_to_tensor(outputs,dtype='float32')

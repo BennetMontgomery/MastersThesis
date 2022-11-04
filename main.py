@@ -6,5 +6,5 @@ ego = ProposedAgent(
     verbose=True
 )
 
-ego.train_nets(episodes=2000)
+ego.train_nets(episodes=3)
 
