@@ -55,6 +55,8 @@ class RoundaboutEnv(gym.Env):
         self.start_lane = None
         self.target_lane = None
 
+        self.prev_accel_val = 0
+
         self.npc_depart_times = []
 
 
@@ -242,6 +244,7 @@ class RoundaboutEnv(gym.Env):
 
         # build initial observation
         self.prev_obs = self._get_obs()
+        self.prev_accel_val = 11
         return self.prev_obs
 
 
@@ -255,7 +258,7 @@ class RoundaboutEnv(gym.Env):
         # extract low level throttle decision
         throttle = action[1]
 
-        print(f"Behaviour: {behaviour} Throttle: {throttle}")
+        # print(f"Behaviour: {behaviour} Throttle: {throttle}")
 
         # reroute vehicles appearing at this time step
         for i in range(len(self.npc_depart_times)):
@@ -314,6 +317,12 @@ class RoundaboutEnv(gym.Env):
         # convert throttle action value to speed change value
         accel_val = (throttle - 14)/2
         new_speed = libsumo.vehicle_getSpeed(self.ego.agentid) + accel_val
+
+        if abs(accel_val - self.prev_accel_val) > 5:
+            reward -= abs(accel_val - self.prev_accel_val) # unsmooth motion penalty
+
+        if new_speed < 0:
+            reward -= new_speed # reversing penalty
 
         # apply throttle decision
         self.ego.change_speed(new_speed, accel_val)

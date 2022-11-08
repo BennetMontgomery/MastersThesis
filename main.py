@@ -3,8 +3,8 @@ from agents.proposed_agent import ProposedAgent
 ego = ProposedAgent(
     agentid='ego',
     network=None,
-    verbose=True
+    verbose=False
 )
 
-ego.train_nets(episodes=3)
+ego.train_nets(episodes=2000)
 

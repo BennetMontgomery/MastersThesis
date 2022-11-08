@@ -213,7 +213,7 @@ class ProposedAgent(Agent):
 
                 # select behaviour according to e-greedy policy
                 try:
-                    b_action, _, _ = self.behaviour_net.select_action(obs, step)
+                    b_action, _, _ = self.behaviour_net.select_action(obs, total_step)
                 except tf.errors.InvalidArgumentError:
                     print("Behaviour failure ", obs)
                     exit(1)
@@ -226,7 +226,7 @@ class ProposedAgent(Agent):
 
                 # select throttle action
                 try:
-                    t_action, _, _ = self.throttle_net.select_action(t_obs, step)
+                    t_action, _, _ = self.throttle_net.select_action(t_obs, total_step)
                 except tf.errors.InvalidArgumentError:
                     print("Throttle failure ", t_obs)
                     exit(1)
