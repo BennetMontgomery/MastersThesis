@@ -14,6 +14,8 @@ MIN_NPCS = minimum_npcs
 MAX_NPCS = maximum_npcs
 COLLISION_REWARD = collision_reward
 GOAL_REWARD = goal_reward
+TIMEOUT = 100
+TIMEOUT_REWARD = -10
 TIMESTEP_REWARD = time_step_reward
 ILLEGAL_LANE_CHANGE_REWARD = illegal_lane_change_reward
 SPAWN_TIME_RANGE = spawn_time_range
@@ -161,82 +163,98 @@ class RoundaboutEnv(gym.Env):
         networks = [entry for entry in sumoconfigs if entry.endswith(".net.xml")]
 
         # select random network
-        network = random.choice(networks)
-        route = "{net}rou.xml".format(net=network[:-7])
+        if options is None:
+            network = random.choice(networks)
+            route = "{net}rou.xml".format(net=network[:-7])
+            num_npcs_0 = 0
+        else:
+            # select validation network
+            network = options[0]
+            route = "{net}rou.xml".format(net=network[:-7])
+            self.npc_depart_times = options[2]
+            num_npcs_0 = 0
+            for npc in self.npc_depart_times:
+                if npc == 0:
+                    num_npcs_0 += 1
 
         print(network)
 
-        # place ego agent at lane 0 in a random edge at timestep 0
-        file = open(CONFIGS_PATH + "{net}".format(net=network))
-        edges = []
-        for line in file:
-            line = line.strip()
-            if line is not None and "edge id=" in line and "function=\"internal\"" not in line:
-                reached_edges = True
-                edges.append(line.split("edge id=")[1].split("\"")[1].split("\"")[0])
+        if options is None:
+            # place ego agent at lane 0 in a random edge at timestep 0
+            file = open(CONFIGS_PATH + "{net}".format(net=network))
+            edges = []
+            for line in file:
+                line = line.strip()
+                if line is not None and "edge id=" in line and "function=\"internal\"" not in line:
+                    edges.append(line.split("edge id=")[1].split("\"")[1].split("\"")[0])
 
-        file.close()
+            file.close()
 
         # always select a starting edge pointing towards a roundabout
-        start_edge = random.choice([edge for edge in edges if "-" not in edge and "R" not in edge])
-        self.ego_last_edge = start_edge
+            start_edge = random.choice([edge for edge in edges if "-" not in edge and "R" not in edge])
+            self.ego_last_edge = start_edge
 
-        # select a finishing edge pointing away from the roundabout
-        finish_edge = random.choice([edge for edge in edges if "-" in edge])
-        self.ego_goal = finish_edge
+            # select a finishing edge pointing away from the roundabout
+            finish_edge = random.choice([edge for edge in edges if "-" in edge])
+            self.ego_goal = finish_edge
 
-        ego_type_line = '<vType id={ID} accel={ACCEL} emergencyDecel={EDECEL} sigma="0" length={LENGTH} maxspeed={MAX} color={COLOUR}/>'.format(
-            ID = EGO_TYPE[0], ACCEL = EGO_TYPE[1], EDECEL = EGO_TYPE[2], LENGTH = EGO_TYPE[3], MAX = EGO_TYPE[4], COLOUR = EGO_TYPE[5]
-        )
-        ego_route_line = '<vehicle id="{ID}" type={TYPE} depart="0">\n' \
-                         '        <route edges="{START} {END}"/>\n' \
-                         '    </vehicle>'.format(ID = self.ego.agentid, TYPE = EGO_TYPE[0], START = start_edge, END = finish_edge)
+            ego_type_line = '<vType id={ID} accel={ACCEL} emergencyDecel={EDECEL} sigma="0" length={LENGTH} maxspeed={MAX} color={COLOUR}/>'.format(
+                ID = EGO_TYPE[0], ACCEL = EGO_TYPE[1], EDECEL = EGO_TYPE[2], LENGTH = EGO_TYPE[3], MAX = EGO_TYPE[4], COLOUR = EGO_TYPE[5]
+            )
+            ego_route_line = '<vehicle id="{ID}" type={TYPE} depart="0">\n' \
+                             '        <route edges="{START} {END}"/>\n' \
+                             '    </vehicle>'.format(ID = self.ego.agentid, TYPE = EGO_TYPE[0], START = start_edge, END = finish_edge)
 
-        # populate environment with random vehicles departing at random times from random input edges
-        npc_type_line = '<vType id={ID} accel={ACCEL} sigma="0.5" length={LENGTH}/>'.format(
-            ID = NPC_TYPE[0], ACCEL = NPC_TYPE[1], LENGTH = NPC_TYPE[2], MAX = NPC_TYPE[3]
-        )
+            # populate environment with random vehicles departing at random times from random input edges
+            npc_type_line = '<vType id={ID} accel={ACCEL} sigma="0.5" length={LENGTH}/>'.format(
+                ID = NPC_TYPE[0], ACCEL = NPC_TYPE[1], LENGTH = NPC_TYPE[2], MAX = NPC_TYPE[3]
+            )
 
-        npc_routes = []
-        self.npc_depart_times = random.sample(range(0, SPAWN_TIME_RANGE), random.randint(MIN_NPCS, MAX_NPCS))
-        self.npc_depart_times.sort()
+            npc_routes = []
+            self.npc_depart_times = random.sample(range(0, SPAWN_TIME_RANGE), random.randint(MIN_NPCS, MAX_NPCS))
+            self.npc_depart_times.sort()
+            for npc in self.npc_depart_times:
+                if npc == 0:
+                    num_npcs_0+=1
 
-        for id in range(len(self.npc_depart_times)):
-            npc_start_edge = random.choice([edge for edge in edges if "-" not in edge])
-            npc_finish_edge = random.choice([edge for edge in edges if "-" in edge])
-            npc_route_line = '<vehicle id="npc{ID}" type={TYPE} depart="{DEPART}">\n' \
-                         '        <route edges="{START} {FINISH}"/>\n' \
-                         '    </vehicle>'.format(ID=id, TYPE=NPC_TYPE[0], DEPART=self.npc_depart_times[id], START=npc_start_edge, FINISH=npc_finish_edge)
-            npc_routes.append(npc_route_line)
+            for id in range(len(self.npc_depart_times)):
+                npc_start_edge = random.choice([edge for edge in edges if "-" not in edge])
+                npc_finish_edge = random.choice([edge for edge in edges if "-" in edge])
+                npc_route_line = '<vehicle id="npc{ID}" type={TYPE} depart="{DEPART}">\n' \
+                             '        <route edges="{START} {FINISH}"/>\n' \
+                             '    </vehicle>'.format(ID=id, TYPE=NPC_TYPE[0], DEPART=self.npc_depart_times[id], START=npc_start_edge, FINISH=npc_finish_edge)
+                npc_routes.append(npc_route_line)
 
-        # write route file
-        file = open(CONFIGS_PATH + "{route}".format(route=route), "w")
+            # write route file
+            file = open(CONFIGS_PATH + "{route}".format(route=route), "w")
 
-        file.write("<routes>\n")
-        file.write("    " + ego_type_line + "\n\n")
-        file.write("    " + npc_type_line + "\n\n")
-        file.write("    " + ego_route_line + "\n\n")
+            file.write("<routes>\n")
+            file.write("    " + ego_type_line + "\n\n")
+            file.write("    " + npc_type_line + "\n\n")
+            file.write("    " + ego_route_line + "\n\n")
 
-        for route in npc_routes:
-            file.write("    " + route + "\n\n")
+            for route in npc_routes:
+                file.write("    " + route + "\n\n")
 
-        file.write("</routes>\n")
-        file.close()
-
-        # compile sumocfg
-        # os.system('{configs}sumocompile.sh'.format(configs=CONFIGS_PATH))
+            file.write("</routes>\n")
+            file.close()
 
         # start simulation
-        libsumo.start(["{render}".format(render="sumo" if self.render_mode == "cli" else "sumo-gui"),
-                       "-c",
-                       "{configs}{config}sumocfg".format(configs=CONFIGS_PATH, config=network[:-7]),
-                       "--lateral-resolution=3.0"])
+        if options is None:
+            libsumo.start(["{render}".format(render="sumo" if self.render_mode == "cli" else "sumo-gui"),
+                           "-c",
+                           "{configs}{config}sumocfg".format(configs=CONFIGS_PATH, config=network[:-7]),
+                           "--lateral-resolution=3.0"])
+        else:
+            libsumo.start(["{render}".format(render="sumo" if self.render_mode == "cli" else "sumo-gui"),
+                           "-c",
+                           "{configs}{config}sumocfg".format(configs=options[1], config=network[:-7]),
+                           "--lateral-resolution=3.0"])
 
         # trigger rerouting
         libsumo.vehicle_rerouteTraveltime(self.ego.agentid)
-        for i in range(len(npc_routes)):
-            if self.npc_depart_times[i] == 0:
-                libsumo.vehicle_rerouteTraveltime("npc{num}".format(num=i))
+        for i in range(num_npcs_0):
+            libsumo.vehicle_rerouteTraveltime("npc{num}".format(num=i))
 
         # advance to timestep 0
 
@@ -342,6 +360,10 @@ class RoundaboutEnv(gym.Env):
         elif self.ego.agentid not in libsumo.vehicle_getIDList():
             # reward for exiting system without reaching goal
             reward += EXIT_REWARD
+            return self.prev_obs, reward, True, None
+        elif libsumo.simulation_getTime() > TIMEOUT:
+            # reward for getting stuck
+            reward += TIMEOUT_REWARD
             return self.prev_obs, reward, True, None
 
         # apply timestep penalty

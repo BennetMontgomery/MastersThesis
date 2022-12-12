@@ -40,31 +40,16 @@ class BehaviourNet(tf.keras.Model):
         self.q_subnet = DQN(q_layers, input_s=((static_input_size*2)*attention_in_d,))
 
         # build memory buffer
-        # self.memory_cap = memory_cap
-        # self.memory = []
-        # self.mem_counter = 0
         self.replay_manager = ReplayManager(replay_cap=memory_cap)
 
     def add_mem(self, experience):
-        # # fill to memory cap
-        # if len(self.memory) < self.memory_cap:
-        #     self.memory.append(experience)
-        # # or replace a pseudo-random memory if cap reached
-        # else:
-        #     self.memory[self.mem_counter % self.capacity] = experience
-        #
-        # self.mem_counter += 1
         self.replay_manager.add_mem(experience)
 
     def sample_replay_batch(self, batch_size):
-        # if len(self.memory) > batch_size:
-        #     return random.sample(self.memory, batch_size)
-        # else:
-        #     raise ValueError("[!!] Replay Buffer queried before {batch} memories accumulated".format(batch=batch_size))
         return self.replay_manager.sample_batch(batch_size)
 
     def select_action(self, obs, step):
-        # get the probabiltiy of selecting a random action instead of e-greedy from policy
+        # get the probabilitiy of selecting a random action instead of e-greedy from policy
         rate = math.exp(-1 * step * self.e_decay)
 
         # convert obs to tensor
@@ -80,15 +65,13 @@ class BehaviourNet(tf.keras.Model):
             return random.randrange(self.q_layers[-1]), rate, False
         else:
             # return argmax_a q(s, a), rate at current step, indicator that action was not random
-            print("selecting action without failure")
+            # print("selecting action without failure")
             return np.argmax(self(obs)), rate, True
 
     def call(self, inputs, training=True, attention_mask=None):
         # if pre-batched
         inputs = tf.convert_to_tensor(inputs, dtype='float32')
 
-        # static_input = tf.convert_to_tensor(inputs[0], dtype='float32')
-        # dynamic_inputs = tf.convert_to_tensor(inputs[1:], dtype='float32')
         if tf.rank(inputs) < 3:
             inputs = tf.expand_dims(inputs, axis=0)
 
@@ -107,19 +90,7 @@ class BehaviourNet(tf.keras.Model):
             print("[?] static_input: ", static_input)
             print("[?] encoded: ", pooled)
 
-        # pooled = tf.repeat(pooled, repeats=tf.shape(static_input)[0], axis=0)
-
-        # q_input = tf.reshape(tf.concat([static_input, pooled], axis=1), [tf.shape(static_input)[0], (self.static_input_size+1)*self.attention_in_d])
         q_input = tf.reshape(tf.concat([static_input, pooled], axis=1), [tf.shape(static_input)[0], ((self.static_input_size)*2)*self.attention_in_d])
-
-        # if another vehicle is present
-        # if len(dynamic_inputs) > 1:
-        #     q_input = tf.reshape(tf.concat([static_input, pooled], axis=1), [1, (self.static_input_size+1) * self.attention_in_d])
-        # # otherwise
-        # else:
-        #     dyn_vec = tf.constant([[[0 for _ in range(self.attention_in_d)]]], dtype='float32')
-        #
-        #     q_input = tf.reshape(tf.concat([static_input, dyn_vec], axis=1), [1, (self.static_input_size+1)*self.attention_in_d])
 
         if VERBOSE:
             print("[?] q_input: ", q_input)

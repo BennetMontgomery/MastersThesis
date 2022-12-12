@@ -11,16 +11,18 @@ from datetime import datetime
 from agents.behaviour_net import BehaviourNet
 from copy import deepcopy
 from parameters.simulator_params import maximum_npcs
-import tensorboard
-from parameters.hyperparameters import variable_input_size, static_input_size
+from parameters.hyperparameters import variable_input_size, static_input_size, gamma, alpha, num_heads_b, \
+    b_action_space_size, t_action_space_size
 
 # CONSTANTS
 SAVE_MODEL = True
-MODEL_DIR = "/home/blm/Documents/labs/thesis/simulator/models"
+MODEL_DIR = "./models"
 
 class ProposedAgent(Agent):
     def __init__(self, agentid, network, LANEUNITS=0.5, MAX_DECEL=7, MAX_ACCEL=4, verbose=False, VIEW_DISTANCE=30):
         super().__init__(agentid, network, LANEUNITS, MAX_DECEL, MAX_ACCEL, verbose, VIEW_DISTANCE)
+
+        self.eval_env = None
 
         # predeclared variables
         self.behaviour_net = None
@@ -37,7 +39,33 @@ class ProposedAgent(Agent):
         self.throttle_net.save_weights(f"{MODEL_DIR}/{model_name}/throttle")
 
     def load_model(self, model):
-        return tf.keras.models.load_model(f"{MODEL_DIR}/{model}")
+        self.behaviour_net = BehaviourNet(
+            static_input_size=static_input_size,
+            variable_input_size=variable_input_size,
+            attention_heads=num_heads_b,
+            q_layers=[256, 128, b_action_space_size],
+            pooler_layers=256,
+            attention_out_ff=128,
+            attention_in_d=256,
+            memory_cap=8000,
+            e_decay=0.001
+        )
+
+        self.throttle_net = BehaviourNet(
+            static_input_size=static_input_size+1,
+            variable_input_size=variable_input_size,
+            attention_heads=8,
+            q_layers=[256, 128, t_action_space_size],
+            pooler_layers=256,
+            attention_out_ff=128,
+            attention_in_d=256,
+            memory_cap=8000,
+            e_decay=0.001
+        )
+
+        self.throttle_net.load_weights(f"{MODEL_DIR}/{model}/throttle")
+        self.behaviour_net.load_weights(f"{MODEL_DIR}/{model}/behaviour")
+        # return tf.keras.models.load_model(f"{MODEL_DIR}/{model}")
 
     def flatten_obs(self, env_obs):
         # flatten observations to something passable to tensorflow
@@ -62,16 +90,13 @@ class ProposedAgent(Agent):
 
     def train_nets(self, episodes=2000, replay_cap=8000, batch_size=32):
         # UNIVERSAL HYPERPARAMS
-        gamma = 0.9 # reward discount factor
         log_freq = 10 # number of rounds between printing of loss and other ML statistics
-        alpha = 0.001 # learning rate
         optimizer = tf.optimizers.Adam(alpha)
+        checkpoint_freq = 100
 
         # BEHAVIOUR SPECIFIC HYPERPARAMS
-        b_action_space_size = 3
         b_q_layers = [256, 128, b_action_space_size] # layer parameters in the behavioural q network
         update_freq_b = 25 # number of rounds between updates to the target q bnet
-        num_heads_b = 8 # number of attention heads
         encoder_layer_b = 256 # width of the attention embeddings
         encoder_feed_forward_b = 128 # width of the attention post-processing network
         pooler_layers_b = encoder_layer_b # width and depth of the seq-2-vec processing network
@@ -152,20 +177,6 @@ class ProposedAgent(Agent):
 
         # train
         for episode in range(episodes):
-            # if episode == 1:
-            #     # ensure starting equality of networks
-            #     policy_params = self.behaviour_net.trainable_variables
-            #     target_params = self.target_behaviour_net.trainable_variables
-            #
-            #     for pvar, tvar in zip(policy_params, target_params):
-            #         tvar.assign(pvar.numpy())
-            #
-            #     policy_params = self.throttle_net.trainable_variables
-            #     target_params = self.target_throttle_net.trainable_variables
-            #
-            #     for pvar, tvar in zip(policy_params, target_params):
-            #         tvar.assign(pvar.numpy())
-
             print(f"Episode {episode}")
 
             self.test_env.reset()
@@ -316,7 +327,7 @@ class ProposedAgent(Agent):
 
                 # update target networks
                 if total_step % update_freq_b == 0:
-                    print("updating")
+                    # print("updating")
                     behaviour_params = self.behaviour_net.trainable_variables
                     optimal_params = self.target_behaviour_net.trainable_variables
 
@@ -324,7 +335,7 @@ class ProposedAgent(Agent):
                         ovar.assign(bvar.numpy())
 
                 if total_step % update_freq_t == 0:
-                    print("updating")
+                    # print("updating")
                     throttle_params = self.throttle_net.trainable_variables
                     optimal_params = self.target_throttle_net.trainable_variables
 
@@ -341,10 +352,13 @@ class ProposedAgent(Agent):
             if episode % log_freq == 0:
                 print(f"Episode: {episode} Episode Reward: {episode_return} P100 Average Reward: {average_reward}")
 
+            if episode % checkpoint_freq == 0:
+                self.checkpoint_model(episode, reward_history)
+
         if SAVE_MODEL:
             time = datetime.now()
 
-            self.folder = f"{time}"
+            self.folder = f"{time}_final"
 
             self.save_model(self.folder)
 
@@ -352,57 +366,62 @@ class ProposedAgent(Agent):
 
             plt.plot(reward_history)
             plt.title(f"{datetime.now}")
-            plt.savefig(f"{MODEL_DIR}/{time}.png")
+            plt.savefig(f"{MODEL_DIR}/{time}/{time}_final.png")
 
             plt.plot(average_reward)
-            plt.title(f"{time} average over time")
-            plt.savefig(f"{MODEL_DIR}/{time} average.png")
+            plt.title(f"{time}_final average over time")
+            plt.savefig(f"{MODEL_DIR}/{time}_final/{time}_final average.png")
             plt.close()
 
         self.test_env.close()
 
-    def validate(self, throttle_model=None, behaviour_model=None, write_to_file=True, eval_eps=1):
-        throttle = self.load_model(throttle_model) if throttle_model is not None else self.throttle_net
-        behaviour = self.load_model(behaviour_model) if behaviour_model is not None else self.behaviour_net
+    def validate(self, eval_scenario, eval_folder, npcs, network=None, graphical_mode=False):
+        options = [eval_scenario, eval_folder, npcs]
 
-        self.eval_env = RoundaboutEnv(self)
-        returns = []
+        if network is not None:
+            self.load_model(network)
+
+        if self.eval_env is None:
+            self.eval_env = RoundaboutEnv(self) if graphical_mode is False else RoundaboutEnv(self, render_mode='sumo-gui')
+
+        curr_state = self.flatten_obs(self.eval_env.reset(options=options))
+        episode_return = 0
         terminated = False
 
-        for episode in range(eval_eps):
-            curr_state = self.eval_env.reset()
-            episode_return = 0
+        while not terminated:
+            b_action = np.argmax(self.behaviour_net(curr_state))
+            t_obs = deepcopy(curr_state)
+            t_obs[0].append(float(b_action))
+            for feature in t_obs[1:]:
+                feature.append(0)
+            t_action = np.argmax(self.throttle_net(t_obs))
 
-            while not terminated:
-                b_action = np.argmax(behaviour(curr_state))
-                t_obs = deepcopy(curr_state)
-                t_obs[0].append(float(b_action))
-                t_action = np.argmax(throttle(t_obs))
+            next_state, reward, terminated, _ = self.eval_env.step([b_action, t_action])
 
-                # apply action
-                next_state, reward, terminated = self.eval_env.step([b_action, t_action])
+            # record reward
+            episode_return += reward
 
-                # record reward
-                episode_return += reward
+            curr_state = self.flatten_obs(next_state)
 
-                if terminated:
-                    returns.append(episode_return)
-                    break
+        return episode_return
 
-                curr_state = next_state
+    def checkpoint_model(self, time_step, reward_history):
+        time = datetime.now()
 
-        self.eval_env.close()
+        self.folder = f"{time}_{time_step}"
 
-        if write_to_file:
-            f = open(f"{MODEL_DIR}/{datetime.now()}.log", "w")
-            f.write(f"Average: {np.sum(returns)/len(returns)}\n")
+        self.save_model(self.folder)
 
-            for episode in range(len(returns)):
-                f.write(f"Validation Episode: {episode} Episode Return: {returns[episode]}\n")
+        average_reward = [reward_history[max(0, episode - 100):(episode + 1)].mean() for episode in range(time_step)]
 
-            f.close()
+        plt.plot(reward_history)
+        plt.title(f"{datetime.now}")
+        plt.savefig(f"{MODEL_DIR}/{time}_{time_step}/{time}_{time_step}.png")
 
-        return np.sum(returns)/len(returns)
+        plt.plot(average_reward)
+        plt.title(f"{time}_final average over time")
+        plt.savefig(f"{MODEL_DIR}/{time}_{time_step}/{time}_{time_step} average.png")
+        plt.close()
 
     def select_action(self, time_step: list[list[float]]):
         # actions may not be selected without training
