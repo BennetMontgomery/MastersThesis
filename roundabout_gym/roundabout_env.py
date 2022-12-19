@@ -261,13 +261,28 @@ class RoundaboutEnv(gym.Env):
         libsumo.simulationStep()
 
         # build initial observation
+        if options is not None:
+            self.ego_goal = libsumo.vehicle_getRoute(self.ego.agentid)[-1]
+
         self.prev_obs = self._get_obs()
         self.prev_accel_val = 11
         return self.prev_obs
 
 
-    def step(self, action):
+    def step(self, action, split_reward=False):
         # set timestep reward to 0
+        if split_reward:
+            reward_matrix={
+                "time": 0,
+                "ilc": 0,
+                "motion": 0,
+                "reversing": 0,
+                "collision": 0,
+                "goal": 0,
+                "exit": 0,
+                "timeout":0
+            }
+
         reward = 0
 
         # extract high level behaviour decision
@@ -308,6 +323,9 @@ class RoundaboutEnv(gym.Env):
             else:
                 reward += ILLEGAL_LANE_CHANGE_REWARD
 
+                if split_reward:
+                    reward_matrix["ilc"] += ILLEGAL_LANE_CHANGE_REWARD
+
         elif behaviour == 1: # change lane right
             # sanity check: only change lanes if a lane exists
             if libsumo.vehicle_getLaneIndex(self.ego.agentid) > 0:
@@ -329,6 +347,9 @@ class RoundaboutEnv(gym.Env):
             # punish illegal lane change attempt
             else:
                 reward += ILLEGAL_LANE_CHANGE_REWARD
+
+                if split_reward:
+                    reward_matrix["ilc"] += ILLEGAL_LANE_CHANGE_REWARD
         elif behaviour != 2: # follow leader does not require specific steering instructions
             raise ValueError("Incorrect first index action value")
 
@@ -339,8 +360,14 @@ class RoundaboutEnv(gym.Env):
         if abs(accel_val - self.prev_accel_val) > 5:
             reward -= abs(accel_val - self.prev_accel_val) # unsmooth motion penalty
 
+            if split_reward:
+                reward_matrix["motion"] -= abs(accel_val - self.prev_accel_val)
+
         if new_speed < 0:
-            reward -= new_speed # reversing penalty
+            reward += new_speed # reversing penalty
+
+            if split_reward:
+                reward_matrix["reversing"] += new_speed
 
         # apply throttle decision
         self.ego.change_speed(new_speed, accel_val)
@@ -352,24 +379,54 @@ class RoundaboutEnv(gym.Env):
         if self.ego.agentid in libsumo.simulation_getCollidingVehiclesIDList():
             # penalty for colliding with other vehicles
             reward += COLLISION_REWARD
+
+            if split_reward:
+                reward_matrix["collision"] += COLLISION_REWARD
+
+                return self.prev_obs, reward, reward_matrix, True, None
+
             return self.prev_obs, reward, True, None
         elif self.ego.agentid not in libsumo.vehicle_getIDList() and self.ego_goal == self.ego_last_edge:
             # reward for succesfully exiting goal state
             reward += GOAL_REWARD
+
+            if split_reward:
+                reward_matrix["goal"] += GOAL_REWARD
+
+                return self.prev_obs, reward, reward_matrix, True, None
+
             return self.prev_obs, reward, True, None
         elif self.ego.agentid not in libsumo.vehicle_getIDList():
             # reward for exiting system without reaching goal
             reward += EXIT_REWARD
+
+            if split_reward:
+                reward_matrix["exit"] += EXIT_REWARD
+
+                return self.prev_obs, reward, reward_matrix, True, None
+
             return self.prev_obs, reward, True, None
         elif libsumo.simulation_getTime() > TIMEOUT:
             # reward for getting stuck
             reward += TIMEOUT_REWARD
+
+            if split_reward:
+                reward_matrix["timeout"] += TIMEOUT_REWARD
+
+                return self.prev_obs, reward, reward_matrix, True, None
+
             return self.prev_obs, reward, True, None
 
         # apply timestep penalty
         reward += TIMESTEP_REWARD
 
         self.prev_obs = self._get_obs()
+        self.ego_last_edge = libsumo.vehicle_getRoadID(self.ego.agentid)
+
+        if split_reward:
+            reward_matrix["time"] += TIMESTEP_REWARD
+
+            return self.prev_obs, reward, reward_matrix, False, None
 
         return self.prev_obs, reward, False, None
 

@@ -1,4 +1,5 @@
 from agents.proposed_agent import ProposedAgent
+import wandb
 
 ego = ProposedAgent(
     agentid='ego',
@@ -6,5 +7,7 @@ ego = ProposedAgent(
     verbose=False
 )
 
-ego.train_nets(episodes=2000)
+wandb.init(project="wandb-test")
+
+ego.train_nets(episodes=10)
 

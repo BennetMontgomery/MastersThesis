@@ -4,6 +4,7 @@ import os
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
+import wandb
 from agents.agent import Agent
 from roundabout_gym.roundabout_env import RoundaboutEnv
 from collections import namedtuple
@@ -172,6 +173,16 @@ class ProposedAgent(Agent):
 
         # track reward history
         reward_history = np.empty(episodes)
+        matrix_history = {
+            "time": np.empty(episodes),
+            "ilc": np.empty(episodes),
+            "motion": np.empty(episodes),
+            "reversing": np.empty(episodes),
+            "collision": np.empty(episodes),
+            "goal": np.empty(episodes),
+            "exit": np.empty(episodes),
+            "timeout": np.empty(episodes)
+        }
 
         total_step = 0
 
@@ -183,6 +194,16 @@ class ProposedAgent(Agent):
 
             # generic training variables
             episode_return = 0
+            episode_reward_matrix = {
+                "time": 0,
+                "ilc": 0,
+                "motion": 0,
+                "reversing": 0,
+                "collision": 0,
+                "goal": 0,
+                "exit": 0,
+                "timeout": 0
+            }
             step = 0
             b_loss_history = []
             t_loss_history = []
@@ -243,7 +264,7 @@ class ProposedAgent(Agent):
                     exit(1)
 
                 # apply action to environment
-                state_prime, reward, terminated, _ = self.test_env.step([b_action, t_action])
+                state_prime, reward, reward_matrix, terminated, _ = self.test_env.step([b_action, t_action], split_reward=True)
                 state_prime = self.flatten_obs(state_prime)
                 obs_action_prime = np.argmax(self.behaviour_net(state_prime))
                 throttle_state_prime = deepcopy(state_prime)
@@ -252,6 +273,8 @@ class ProposedAgent(Agent):
                     vehicle.append(0)
 
                 episode_return += reward
+                for key in reward_matrix.keys():
+                    episode_reward_matrix[key] += reward_matrix[key]
 
                 # store experience in replay buffers
                 obstype2 = type(obs)
@@ -300,7 +323,10 @@ class ProposedAgent(Agent):
                     optimizer.apply_gradients(zip(gradients, variables))
 
                     # record loss
+                    # local logging
                     b_loss_history.append(loss.numpy())
+                    # w and b logging
+                    b_loss_step = loss.numpy()
 
                     # UPDATE THROTTLE NETWORK
                     # calculate loss and apply gradient descent
@@ -320,10 +346,15 @@ class ProposedAgent(Agent):
                     optimizer.apply_gradients(zip(gradients, variables))
 
                     # record loss
+                    # local loss logging
                     t_loss_history.append(loss.numpy())
+                    # w and b logging
+                    t_loss_step = loss.numpy()
                 else:
                     b_loss_history.append(0)
+                    b_loss_step = 0
                     t_loss_history.append(0)
+                    t_loss_step = 0
 
                 # update target networks
                 if total_step % update_freq_b == 0:
@@ -348,6 +379,20 @@ class ProposedAgent(Agent):
 
             reward_history[episode] = episode_return
             average_reward = reward_history[max(0, episode - 100):(episode+1)].mean()
+
+            wandb.log({
+                "behaviour_loss": b_loss_step,
+                "throttle_loss": t_loss_step,
+                "past_average_reward": average_reward,
+                "aggregate_episode_reward": episode_return,
+                "time_reward": episode_reward_matrix["time"],
+                "illegal_lane_change_reward": episode_reward_matrix["ilc"],
+                "smooth_motion_reward": episode_reward_matrix["motion"],
+                "reversing_reward": episode_reward_matrix["reversing"],
+                "collision_reward": episode_reward_matrix["collision"],
+                "goal_reward": episode_reward_matrix["goal"],
+                "timeout_reward": episode_reward_matrix["timeout"]
+            })
 
             if episode % log_freq == 0:
                 print(f"Episode: {episode} Episode Reward: {episode_return} P100 Average Reward: {average_reward}")
@@ -375,7 +420,7 @@ class ProposedAgent(Agent):
 
         self.test_env.close()
 
-    def validate(self, eval_scenario, eval_folder, npcs, network=None, graphical_mode=False):
+    def validate(self, eval_scenario, eval_folder, npcs, network=None, graphical_mode=False, split_reward=False):
         options = [eval_scenario, eval_folder, npcs]
 
         if network is not None:
@@ -386,6 +431,16 @@ class ProposedAgent(Agent):
 
         curr_state = self.flatten_obs(self.eval_env.reset(options=options))
         episode_return = 0
+        episode_return_matrix = {
+                "time": 0,
+                "ilc": 0,
+                "motion": 0,
+                "reversing": 0,
+                "collision": 0,
+                "goal": 0,
+                "exit": 0,
+                "timeout":0
+        }
         terminated = False
 
         while not terminated:
@@ -396,12 +451,22 @@ class ProposedAgent(Agent):
                 feature.append(0)
             t_action = np.argmax(self.throttle_net(t_obs))
 
-            next_state, reward, terminated, _ = self.eval_env.step([b_action, t_action])
+            if split_reward:
+                next_state, reward, reward_matrix, terminated, _ = self.eval_env.step([b_action, t_action], split_reward=True)
+            else:
+                next_state, reward, terminated, _ = self.eval_env.step([b_action, t_action])
 
             # record reward
             episode_return += reward
 
+            if split_reward:
+                for key in episode_return_matrix.keys():
+                    episode_return_matrix[key] += reward_matrix[key]
+
             curr_state = self.flatten_obs(next_state)
+
+        if split_reward:
+            return episode_return, episode_return_matrix
 
         return episode_return
 
