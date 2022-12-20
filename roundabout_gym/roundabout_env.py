@@ -61,6 +61,8 @@ class RoundaboutEnv(gym.Env):
 
         self.npc_depart_times = []
 
+        self.network = None
+
 
 
     ''' private method for collating observations for processing '''
@@ -164,24 +166,24 @@ class RoundaboutEnv(gym.Env):
 
         # select random network
         if options is None:
-            network = random.choice(networks)
-            route = "{net}rou.xml".format(net=network[:-7])
+            self.network = random.choice(networks)
+            route = "{net}rou.xml".format(net=self.network[:-7])
             num_npcs_0 = 0
         else:
             # select validation network
-            network = options[0]
-            route = "{net}rou.xml".format(net=network[:-7])
+            self.network = options[0]
+            route = "{net}rou.xml".format(net=self.network[:-7])
             self.npc_depart_times = options[2]
             num_npcs_0 = 0
             for npc in self.npc_depart_times:
                 if npc == 0:
                     num_npcs_0 += 1
 
-        print(network)
+        print(self.network)
 
         if options is None:
             # place ego agent at lane 0 in a random edge at timestep 0
-            file = open(CONFIGS_PATH + "{net}".format(net=network))
+            file = open(CONFIGS_PATH + "{net}".format(net=self.network))
             edges = []
             for line in file:
                 line = line.strip()
@@ -243,12 +245,12 @@ class RoundaboutEnv(gym.Env):
         if options is None:
             libsumo.start(["{render}".format(render="sumo" if self.render_mode == "cli" else "sumo-gui"),
                            "-c",
-                           "{configs}{config}sumocfg".format(configs=CONFIGS_PATH, config=network[:-7]),
+                           "{configs}{config}sumocfg".format(configs=CONFIGS_PATH, config=self.network[:-7]),
                            "--lateral-resolution=3.0"])
         else:
             libsumo.start(["{render}".format(render="sumo" if self.render_mode == "cli" else "sumo-gui"),
                            "-c",
-                           "{configs}{config}sumocfg".format(configs=options[1], config=network[:-7]),
+                           "{configs}{config}sumocfg".format(configs=options[1], config=self.network[:-7]),
                            "--lateral-resolution=3.0"])
 
         # trigger rerouting
