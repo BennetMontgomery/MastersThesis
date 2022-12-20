@@ -183,6 +183,21 @@ class ProposedAgent(Agent):
             "exit": np.empty(episodes),
             "timeout": np.empty(episodes)
         }
+        env_wise_reward_history = {"magic": [], "simple": [], "simple.orig": [], "twolane": [], "threelane": [], "unrealistic": []}
+        env_wise_matrix_history = {
+            "magic": {"time": [], "ilc": [], "motion": [], "reversing": [], "collision": [], "goal": [], "exit": [],
+                      "timeout": []},
+            "simple": {"time": [], "ilc": [], "motion": [], "reversing": [], "collision": [], "goal": [], "exit": [],
+                      "timeout": []},
+            "simple.orig": {"time": [], "ilc": [], "motion": [], "reversing": [], "collision": [], "goal": [], "exit": [],
+                      "timeout": []},
+            "twolane": {"time": [], "ilc": [], "motion": [], "reversing": [], "collision": [], "goal": [], "exit": [],
+                      "timeout": []},
+            "threelane": {"time": [], "ilc": [], "motion": [], "reversing": [], "collision": [], "goal": [], "exit": [],
+                      "timeout": []},
+            "unrealistic": {"time": [], "ilc": [], "motion": [], "reversing": [], "collision": [], "goal": [], "exit": [],
+                      "timeout": []}
+        }
 
         total_step = 0
 
@@ -191,6 +206,8 @@ class ProposedAgent(Agent):
             print(f"Episode {episode}")
 
             self.test_env.reset()
+
+            environment = self.test_env.network[:-8]
 
             # generic training variables
             episode_return = 0
@@ -379,6 +396,12 @@ class ProposedAgent(Agent):
 
             reward_history[episode] = episode_return
             average_reward = reward_history[max(0, episode - 100):(episode+1)].mean()
+            env_wise_average_reward = np.asarray(env_wise_reward_history[environment][max(0, episode-100):(episode+1)]).mean()
+
+            env_wise_reward_history[environment].append(episode_return)
+
+            for key in episode_reward_matrix.keys():
+                env_wise_matrix_history[environment][key].append(episode_reward_matrix[key])
 
             wandb.log({
                 "behaviour_loss": b_loss_step,
@@ -391,7 +414,16 @@ class ProposedAgent(Agent):
                 "reversing_reward": episode_reward_matrix["reversing"],
                 "collision_reward": episode_reward_matrix["collision"],
                 "goal_reward": episode_reward_matrix["goal"],
-                "timeout_reward": episode_reward_matrix["timeout"]
+                "timeout_reward": episode_reward_matrix["timeout"],
+                f"{environment}_past_average_reward": env_wise_average_reward,
+                f"{environment}_aggregate_episode_reward": episode_return,
+                f"{environment}_time_reward": episode_reward_matrix["time"],
+                f"{environment}_illegal_lane_change_reward": episode_reward_matrix["ilc"],
+                f"{environment}_smooth_motion_reward": episode_reward_matrix["motion"],
+                f"{environment}_reversing_reward": episode_reward_matrix["reversing"],
+                f"{environment}_collision_reward": episode_reward_matrix["collision"],
+                f"{environment}_goal_reward": episode_reward_matrix["goal"],
+                f"{environment}_timeout_reward": episode_reward_matrix["timeout"],
             })
 
             if episode % log_freq == 0:
@@ -411,13 +443,14 @@ class ProposedAgent(Agent):
 
             plt.plot(reward_history)
             plt.title(f"{datetime.now}")
-            plt.savefig(f"{MODEL_DIR}/{time}/{time}_final.png")
+            plt.savefig(f"{MODEL_DIR}/{time}_final/{time}_final.png")
 
             plt.plot(average_reward)
             plt.title(f"{time}_final average over time")
             plt.savefig(f"{MODEL_DIR}/{time}_final/{time}_final average.png")
             plt.close()
 
+        wandb.finish()
         self.test_env.close()
 
     def validate(self, eval_scenario, eval_folder, npcs, network=None, graphical_mode=False, split_reward=False):
