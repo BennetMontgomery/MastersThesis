@@ -7,28 +7,24 @@
         <route edges="E2 E-3"/>
     </vehicle>
 
-    <vehicle id="npc0" type="npctype" depart="0">
-        <route edges="E2 E-1"/>
+    <vehicle id="npc0" type="npctype" depart="4">
+        <route edges="RE2 E-3"/>
     </vehicle>
 
-    <vehicle id="npc1" type="npctype" depart="7">
-        <route edges="RE2 E-1"/>
+    <vehicle id="npc1" type="npctype" depart="6">
+        <route edges="E2 E-3"/>
     </vehicle>
 
-    <vehicle id="npc2" type="npctype" depart="8">
-        <route edges="E2 E-2"/>
+    <vehicle id="npc2" type="npctype" depart="9">
+        <route edges="RE2 E-3"/>
     </vehicle>
 
-    <vehicle id="npc3" type="npctype" depart="9">
+    <vehicle id="npc3" type="npctype" depart="14">
+        <route edges="RE3 E-3"/>
+    </vehicle>
+
+    <vehicle id="npc4" type="npctype" depart="15">
         <route edges="RE1 E-2"/>
-    </vehicle>
-
-    <vehicle id="npc4" type="npctype" depart="11">
-        <route edges="RE3 E-2"/>
-    </vehicle>
-
-    <vehicle id="npc5" type="npctype" depart="15">
-        <route edges="E1 E-2"/>
     </vehicle>
 
 </routes>

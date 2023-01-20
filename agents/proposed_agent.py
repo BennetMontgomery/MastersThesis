@@ -89,7 +89,7 @@ class ProposedAgent(Agent):
         # return static vector followed by dynamic array observation vector
         return obs
 
-    def train_nets(self, episodes=2000, replay_cap=8000, batch_size=32):
+    def train_nets(self, episodes=2000, replay_cap=8000, batch_size=128):
         # UNIVERSAL HYPERPARAMS
         log_freq = 10 # number of rounds between printing of loss and other ML statistics
         optimizer = tf.optimizers.Adam(alpha)
@@ -424,6 +424,7 @@ class ProposedAgent(Agent):
                 f"{environment}_collision_reward": episode_reward_matrix["collision"],
                 f"{environment}_goal_reward": episode_reward_matrix["goal"],
                 f"{environment}_timeout_reward": episode_reward_matrix["timeout"],
+                f"{environment}_drac_reward": episode_reward_matrix["drac"]
             })
 
             if episode % log_freq == 0:
