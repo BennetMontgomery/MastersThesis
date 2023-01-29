@@ -4,27 +4,51 @@
     <vType id="npctype" accel="0.8" sigma="0.5" length="5"/>
 
     <vehicle id="ego" type="agenttype" depart="0">
-        <route edges="E2 E-3"/>
+        <route edges="E3 E-2"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
     </vehicle>
 
-    <vehicle id="npc0" type="npctype" depart="4">
+    <vehicle id="npc0" type="npctype" depart="0">
+        <route edges="E1 E-1"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
+    </vehicle>
+
+    <vehicle id="npc1" type="npctype" depart="1">
+        <route edges="RE3 E-2"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
+    </vehicle>
+
+    <vehicle id="npc2" type="npctype" depart="3">
         <route edges="RE2 E-3"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
     </vehicle>
 
-    <vehicle id="npc1" type="npctype" depart="6">
-        <route edges="E2 E-3"/>
+    <vehicle id="npc3" type="npctype" depart="4">
+        <route edges="E1 E-3"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
     </vehicle>
 
-    <vehicle id="npc2" type="npctype" depart="9">
-        <route edges="RE2 E-3"/>
+    <vehicle id="npc4" type="npctype" depart="5">
+        <route edges="E1 E-1"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
     </vehicle>
 
-    <vehicle id="npc3" type="npctype" depart="14">
-        <route edges="RE3 E-3"/>
+    <vehicle id="npc5" type="npctype" depart="10">
+        <route edges="E2 E-1"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
     </vehicle>
 
-    <vehicle id="npc4" type="npctype" depart="15">
-        <route edges="RE1 E-2"/>
+    <vehicle id="npc6" type="npctype" depart="12">
+        <route edges="RE1 E-3"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
     </vehicle>
 
 </routes>

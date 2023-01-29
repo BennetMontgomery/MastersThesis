@@ -186,17 +186,17 @@ class ProposedAgent(Agent):
         env_wise_reward_history = {"magic": [], "simple": [], "simple.orig": [], "twolane": [], "threelane": [], "unrealistic": []}
         env_wise_matrix_history = {
             "magic": {"time": [], "ilc": [], "motion": [], "reversing": [], "collision": [], "goal": [], "exit": [],
-                      "timeout": []},
+                      "timeout": [], "drac": []},
             "simple": {"time": [], "ilc": [], "motion": [], "reversing": [], "collision": [], "goal": [], "exit": [],
-                      "timeout": []},
+                      "timeout": [], "drac": []},
             "simple.orig": {"time": [], "ilc": [], "motion": [], "reversing": [], "collision": [], "goal": [], "exit": [],
-                      "timeout": []},
+                      "timeout": [], "drac": []},
             "twolane": {"time": [], "ilc": [], "motion": [], "reversing": [], "collision": [], "goal": [], "exit": [],
-                      "timeout": []},
+                      "timeout": [], "drac": []},
             "threelane": {"time": [], "ilc": [], "motion": [], "reversing": [], "collision": [], "goal": [], "exit": [],
-                      "timeout": []},
+                      "timeout": [], "drac": []},
             "unrealistic": {"time": [], "ilc": [], "motion": [], "reversing": [], "collision": [], "goal": [], "exit": [],
-                      "timeout": []}
+                      "timeout": [], "drac": []}
         }
 
         total_step = 0
@@ -219,7 +219,8 @@ class ProposedAgent(Agent):
                 "collision": 0,
                 "goal": 0,
                 "exit": 0,
-                "timeout": 0
+                "timeout": 0,
+                "drac": 0
             }
             step = 0
             b_loss_history = []

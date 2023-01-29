@@ -205,6 +205,8 @@ class RoundaboutEnv(gym.Env):
             )
             ego_route_line = '<vehicle id="{ID}" type={TYPE} depart="0">\n' \
                              '        <route edges="{START} {END}"/>\n' \
+                             '        <param key="has.ssm.device" value="true"/>\n' \
+                             '        <param key="device.ssm.measures" value="DRAC"/>\n' \
                              '    </vehicle>'.format(ID = self.ego.agentid, TYPE = EGO_TYPE[0], START = start_edge, END = finish_edge)
 
             # populate environment with random vehicles departing at random times from random input edges
@@ -422,6 +424,19 @@ class RoundaboutEnv(gym.Env):
 
             return self.prev_obs, reward, True, None
 
+        # apply drac penalty
+        for vehicle in libsumo.vehicle_getIDList():
+            try:
+                reward -= float(libsumo.vehicle_getParameter(vehicle, "device.ssm.maxDRAC"))
+            except ValueError:
+                reward += 0
+
+            if split_reward:
+                try:
+                    reward_matrix["drac"] -= float(libsumo.vehicle_getParameter(vehicle, "device.ssm.maxDRAC"))
+                except ValueError:
+                    reward_matrix["drac"] += 0
+
         # apply timestep penalty
         reward += TIMESTEP_REWARD
 
@@ -432,14 +447,6 @@ class RoundaboutEnv(gym.Env):
             reward_matrix["time"] += TIMESTEP_REWARD
 
             return self.prev_obs, reward, reward_matrix, False, None
-
-        # apply drac penalty
-        for vehicle in libsumo.vehicle_getIDList():
-            if vehicle != self.ego.agentid:
-                reward += libsumo.vehicle_getParameter(vehicle, "device.ssm.maxDRAC")
-
-                if split_reward:
-                    reward_matrix["drac"] += libsumo.vehicle_getParameter(vehicle, "device.ssm.maxDRAC")
 
         return self.prev_obs, reward, False, None
 
