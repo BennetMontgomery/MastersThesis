@@ -89,7 +89,7 @@ class ProposedAgent(Agent):
         # return static vector followed by dynamic array observation vector
         return obs
 
-    def train_nets(self, episodes=2000, replay_cap=8000, batch_size=128):
+    def train_nets(self, episodes=2000, replay_cap=8000, batch_size=64):
         # UNIVERSAL HYPERPARAMS
         log_freq = 10 # number of rounds between printing of loss and other ML statistics
         optimizer = tf.optimizers.Adam(alpha)
@@ -177,26 +177,17 @@ class ProposedAgent(Agent):
             "time": np.empty(episodes),
             "ilc": np.empty(episodes),
             "motion": np.empty(episodes),
-            "reversing": np.empty(episodes),
-            "collision": np.empty(episodes),
             "goal": np.empty(episodes),
-            "exit": np.empty(episodes),
-            "timeout": np.empty(episodes)
+            "drac": np.empty(episodes)
         }
         env_wise_reward_history = {"magic": [], "simple": [], "simple.orig": [], "twolane": [], "threelane": [], "unrealistic": []}
         env_wise_matrix_history = {
-            "magic": {"time": [], "ilc": [], "motion": [], "reversing": [], "collision": [], "goal": [], "exit": [],
-                      "timeout": [], "drac": []},
-            "simple": {"time": [], "ilc": [], "motion": [], "reversing": [], "collision": [], "goal": [], "exit": [],
-                      "timeout": [], "drac": []},
-            "simple.orig": {"time": [], "ilc": [], "motion": [], "reversing": [], "collision": [], "goal": [], "exit": [],
-                      "timeout": [], "drac": []},
-            "twolane": {"time": [], "ilc": [], "motion": [], "reversing": [], "collision": [], "goal": [], "exit": [],
-                      "timeout": [], "drac": []},
-            "threelane": {"time": [], "ilc": [], "motion": [], "reversing": [], "collision": [], "goal": [], "exit": [],
-                      "timeout": [], "drac": []},
-            "unrealistic": {"time": [], "ilc": [], "motion": [], "reversing": [], "collision": [], "goal": [], "exit": [],
-                      "timeout": [], "drac": []}
+            "magic": {"time": [], "ilc": [], "motion": [], "goal": [], "drac": []},
+            "simple": {"time": [], "ilc": [], "motion": [], "goal": [], "drac": []},
+            "simple.orig": {"time": [], "ilc": [], "motion": [], "goal": [], "drac": []},
+            "twolane": {"time": [], "ilc": [], "motion": [], "reversing": [], "goal": [], "drac": []},
+            "threelane": {"time": [], "ilc": [], "motion": [], "goal": [], "drac": []},
+            "unrealistic": {"time": [], "ilc": [], "motion": [], "goal": [], "drac": []}
         }
 
         total_step = 0
@@ -215,11 +206,7 @@ class ProposedAgent(Agent):
                 "time": 0,
                 "ilc": 0,
                 "motion": 0,
-                "reversing": 0,
-                "collision": 0,
                 "goal": 0,
-                "exit": 0,
-                "timeout": 0,
                 "drac": 0
             }
             step = 0
@@ -322,10 +309,10 @@ class ProposedAgent(Agent):
                     throttle_terminates = np.asarray(throttle_minibatch[4])
 
                     # UPDATE BEHAVIOUR NETWORK
-                    # calculate loss and apply gradient descent
-                    debug = self.target_behaviour_net(behaviour_state_primes, training=True)
-                    #q_prime = np.max(self.target_behaviour_net(behaviour_state_primes, training=True), axis=1)
-                    q_prime = np.max(debug, axis=1)
+                    # # calculate loss and apply gradient descent
+                    # debug = self.target_behaviour_net(behaviour_state_primes, training=True)
+                    q_prime = np.max(self.target_behaviour_net(behaviour_state_primes, training=True), axis=1)
+                    # q_prime = np.max(debug, axis=1)
                     q_optimal = np.where(behaviour_terminates, behaviour_rewards, behaviour_rewards + gamma*q_prime)
                     q_optimal = tf.convert_to_tensor(q_optimal, dtype='float32')
                     with tf.GradientTape() as tape:
@@ -412,19 +399,13 @@ class ProposedAgent(Agent):
                 "time_reward": episode_reward_matrix["time"],
                 "illegal_lane_change_reward": episode_reward_matrix["ilc"],
                 "smooth_motion_reward": episode_reward_matrix["motion"],
-                "reversing_reward": episode_reward_matrix["reversing"],
-                "collision_reward": episode_reward_matrix["collision"],
                 "goal_reward": episode_reward_matrix["goal"],
-                "timeout_reward": episode_reward_matrix["timeout"],
                 f"{environment}_past_average_reward": env_wise_average_reward,
                 f"{environment}_aggregate_episode_reward": episode_return,
                 f"{environment}_time_reward": episode_reward_matrix["time"],
                 f"{environment}_illegal_lane_change_reward": episode_reward_matrix["ilc"],
                 f"{environment}_smooth_motion_reward": episode_reward_matrix["motion"],
-                f"{environment}_reversing_reward": episode_reward_matrix["reversing"],
-                f"{environment}_collision_reward": episode_reward_matrix["collision"],
                 f"{environment}_goal_reward": episode_reward_matrix["goal"],
-                f"{environment}_timeout_reward": episode_reward_matrix["timeout"],
                 f"{environment}_drac_reward": episode_reward_matrix["drac"]
             })
 
@@ -470,11 +451,8 @@ class ProposedAgent(Agent):
                 "time": 0,
                 "ilc": 0,
                 "motion": 0,
-                "reversing": 0,
-                "collision": 0,
                 "goal": 0,
-                "exit": 0,
-                "timeout":0
+                "drac": 0
         }
         terminated = False
 
