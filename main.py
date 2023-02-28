@@ -9,5 +9,5 @@ ego = ProposedAgent(
 
 wandb.init(project="wandb-test")
 
-ego.train_nets(episodes=2000)
+ego.train_nets(episodes=1)
 
