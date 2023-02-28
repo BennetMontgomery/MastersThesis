@@ -76,15 +76,24 @@ class BehaviourNet(tf.keras.Model):
         if tf.rank(inputs) < 3:
             inputs = tf.expand_dims(inputs, axis=0)
 
+        # shift input value to allow 0 masking
+        inputs = (np.array(inputs) + 1).tolist()
+
+        # pad inputs to max_vehicles
+        padding_entry = [[0 for i in range(self.variable_input_size)]]
+
+        # pad observations to max_length
+        for obs in inputs:
+            obs += padding_entry * (maximum_npcs - len(obs))
+            print(len(obs))
+
         static_input = tf.expand_dims(tf.convert_to_tensor([obs[0] for obs in inputs]), axis=1)
         dynamic_inputs = tf.convert_to_tensor([obs[1:] for obs in inputs])
-
 
         static_input = self.static_embedder(static_input)
 
         # encode dynamic inputs
         encoded = self.encoder(dynamic_inputs, training=training, mask=attention_mask)
-
 
         # call q network
         q_input = tf.concat([static_input, encoded], 1)
