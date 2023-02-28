@@ -26,19 +26,8 @@ class Encoder(tf.keras.layers.Layer):
         self.dropout_feedforward = tf.keras.layers.Dropout(rate)
 
     def call(self, agents, training=True, mask=None):
-        # ego_embedding = self.embedder(tf.convert_to_tensor(agents[0]))
-        # npc_embedding = self.embedder(tf.convert_to_tensor(agents[1:]))
         ego_embedding = self.embedder(tf.expand_dims(tf.convert_to_tensor([obs[0] for obs in agents]),axis=1))
         npc_embedding = self.embedder(tf.convert_to_tensor([obs[1:] for obs in agents]))
-
-
-        # batchify
-        # if tf.rank(npc_embedding) < 4:
-        #     ego_embedding = tf.expand_dims(tf.expand_dims(ego_embedding, axis=0), axis=0)
-        #     npc_embedding = tf.expand_dims(npc_embedding, axis=0)
-        # else:
-        #     # batched by batch sampling already
-        #     ego_embedding = tf.repeat(tf.expand_dims(ego_embedding, axis=0), tf.shape(npc_embedding)[0], axis=0)
 
         attention = self.multi_head(
             query=ego_embedding,
@@ -68,11 +57,8 @@ class AttentionPooler(tf.keras.layers.Layer):
             tf.keras.layers.Dense(layer_param)
         ])
 
-        # self.pooler_input = tf.keras.layers.Dense(attention_layer_width, input_shape=input_s, activation='relu')
-        # self.pooling_layers = [tf.keras.layers.Dense(layer, activation='relu') for layer in layer_params]
 
     def call(self, inputs):
-        # inputs = tf.squeeze(inputs)
         outputs = []
 
         for batch in inputs:
@@ -83,19 +69,5 @@ class AttentionPooler(tf.keras.layers.Layer):
 
             pooled = tf.squeeze(tf.reduce_sum(output_batch, axis=0))
             outputs.append(pooled)
-            # # if tf.rank(tensor) < 3:
-            # #     tensor = tf.expand_dims(tensor, axis=0)
-            #
-            # output = self.pooler(tensor)
-            #
-            # # output = self.pooler_input(batch)
-            # #
-            # # for layer in self.pooling_layers:
-            # #     output = layer(output)
-            #
-            # outputs.append(output)
-
-        # pooled = tf.reduce_sum(tf.reduce_sum(tf.reduce_sum(tf.convert_to_tensor(outputs), axis=1), axis=0), axis=0)
-        # pooled = tf.expand_dims(tf.reduce_sum(tf.reduce_sum(tf.convert_to_tensor(outputs), axis=1), axis=0), axis=0)
 
         return tf.convert_to_tensor(outputs,dtype='float32')

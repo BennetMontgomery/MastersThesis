@@ -10,11 +10,11 @@ from agents.replay_manager import ReplayManager
 
 # CONSTANTS
 VERBOSE = False
-
+    
 class BehaviourNet(tf.keras.Model):
     def __init__(self,
                  static_input_size, variable_input_size,
-                 attention_in_d, q_layers, pooler_layers, attention_out_ff, attention_heads,
+                 attention_in_d, q_layers, attention_out_ff, attention_heads,
                  memory_cap, e_decay=0.001, dropout_rate=0.01):
         super(BehaviourNet, self).__init__()
 
@@ -25,23 +25,24 @@ class BehaviourNet(tf.keras.Model):
         self.q_layers = q_layers
 
         # construct sublayers
-        self.input_layer = tf.keras.layers.InputLayer(input_shape=(maximum_npcs+1,static_input_size))
-
         # encoder
         self.encoder = Encoder(attention_in_d, attention_heads, attention_out_ff, dropout_rate, variable_input_size)
-
-        # encoding pooler
-        self.pooler = AttentionPooler(attention_in_d, pooler_layers, static_input_size)
-
+        
         # static embedder
         self.static_embedder = tf.keras.layers.Embedding(200, attention_in_d, mask_zero=True)
 
         # Q subnet
-        self.q_subnet = DQN(q_layers, input_s=((static_input_size*2)*attention_in_d,))
+        # self.q_subnet = DQN(q_layers, input_s=((static_input_size*2)*attention_in_d,))
+        self.q_subnet = tf.keras.Sequential([
+            tf.keras.layers.Flatten(),
+            tf.keras.layers.Dense(256, activation="relu"),
+            tf.keras.layers.Dense(128, activation="relu"),
+            tf.keras.layers.Dense(q_layers[-1]),
+        ])
 
         # build memory buffer
         self.replay_manager = ReplayManager(replay_cap=memory_cap)
-
+        
     def add_mem(self, experience):
         self.replay_manager.add_mem(experience)
 
@@ -49,7 +50,7 @@ class BehaviourNet(tf.keras.Model):
         return self.replay_manager.sample_batch(batch_size)
 
     def select_action(self, obs, step):
-        # get the probabilitiy of selecting a random action instead of e-greedy from policy
+        # get the probability of selecting a random action instead of e-greedy from policy
         rate = math.exp(-1 * step * self.e_decay)
 
         # convert obs to tensor
@@ -75,22 +76,27 @@ class BehaviourNet(tf.keras.Model):
         if tf.rank(inputs) < 3:
             inputs = tf.expand_dims(inputs, axis=0)
 
-        static_input = tf.convert_to_tensor([obs[0] for obs in inputs])
+        # shift input value to allow 0 masking
+        inputs = (np.array(inputs) + 1).tolist()
+
+        # pad inputs to max_vehicles
+        padding_entry = [[0 for i in range(self.variable_input_size)]]
+
+        # pad observations to max_length
+        for obs in inputs:
+            obs += padding_entry * (maximum_npcs - len(obs))
+            print(len(obs))
+
+        static_input = tf.expand_dims(tf.convert_to_tensor([obs[0] for obs in inputs]), axis=1)
         dynamic_inputs = tf.convert_to_tensor([obs[1:] for obs in inputs])
 
         static_input = self.static_embedder(static_input)
 
         # encode dynamic inputs
-        encoded =self.encoder(dynamic_inputs, training=training, mask=attention_mask)
-
-        pooled = self.pooler(encoded)
+        encoded = self.encoder(dynamic_inputs, training=training, mask=attention_mask)
 
         # call q network
-        if VERBOSE:
-            print("[?] static_input: ", static_input)
-            print("[?] encoded: ", pooled)
-
-        q_input = tf.reshape(tf.concat([static_input, pooled], axis=1), [tf.shape(static_input)[0], ((self.static_input_size)*2)*self.attention_in_d])
+        q_input = tf.concat([static_input, encoded], 1)
 
         if VERBOSE:
             print("[?] q_input: ", q_input)

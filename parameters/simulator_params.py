@@ -1,7 +1,7 @@
 # global simulation parameters
-minimum_npcs = 4
-maximum_npcs = 12
-spawn_time_range = 16
+minimum_npcs = 20
+maximum_npcs = 24
+spawn_time_range = 24
 
 # REWARDS
 collision_reward = -20

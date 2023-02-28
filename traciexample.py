@@ -16,7 +16,9 @@ NETWORK=sumolib.net.readNet('./Sumoconfgs/simple.net.xml')
 LANEWIDTH=3
 LANEUNITS=1.0
 
-libsumo.start(["sumo", "-c", "./Sumoconfgs/simple.sumocfg", "--lateral-resolution=3.0"])
+libsumo.start(["sumo-gui", "-c", "./Sumoconfgs/simple.sumocfg", "--lateral-resolution=3.0"])
+
+libsumo.vehicle_rerouteTraveltime("ego")
 
 # step to 1
 libsumo.simulationStep()
