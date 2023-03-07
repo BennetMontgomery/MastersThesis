@@ -95,7 +95,7 @@ class ProposedAgent(Agent):
 
         # BEHAVIOUR SPECIFIC HYPERPARAMS
         b_q_layers = [256, 128, b_action_space_size] # layer parameters in the behavioural q network
-        update_freq_b = 25 # number of rounds between updates to the target q bnet
+        update_freq_b = 100 # number of rounds between updates to the target q bnet
         encoder_layer_b = 256 # width of the attention embeddings
         encoder_feed_forward_b = 128 # width of the attention post-processing network
         pooler_layers_b = encoder_layer_b # width and depth of the seq-2-vec processing network
@@ -104,7 +104,7 @@ class ProposedAgent(Agent):
         # THROTTLE SPECIFIC HYPERPARAMS
         t_action_space_size = 22
         t_q_layers = [256, 128, t_action_space_size]  # layer parameters in the throttle q network
-        update_freq_t = 25  # number of rounds between updates to the target q tnet
+        update_freq_t = 100  # number of rounds between updates to the target q tnet
         num_heads_t = 8  # number of attention heads
         encoder_layer_t = 256  # width of the attention embeddings
         encoder_feed_forward_t = 128  # width of the attention post-processing network
@@ -172,16 +172,17 @@ class ProposedAgent(Agent):
             "ilc": np.empty(episodes),
             "motion": np.empty(episodes),
             "goal": np.empty(episodes),
-            "drac": np.empty(episodes)
+            "drac": np.empty(episodes),
+            "speed": np.empty(episodes)
         }
         env_wise_reward_history = {"magic": [], "simple": [], "simple.orig": [], "twolane": [], "threelane": [], "unrealistic": []}
         env_wise_matrix_history = {
-            "magic": {"time": [], "ilc": [], "motion": [], "goal": [], "drac": []},
-            "simple": {"time": [], "ilc": [], "motion": [], "goal": [], "drac": []},
-            "simple.orig": {"time": [], "ilc": [], "motion": [], "goal": [], "drac": []},
-            "twolane": {"time": [], "ilc": [], "motion": [], "reversing": [], "goal": [], "drac": []},
-            "threelane": {"time": [], "ilc": [], "motion": [], "goal": [], "drac": []},
-            "unrealistic": {"time": [], "ilc": [], "motion": [], "goal": [], "drac": []}
+            "magic": {"time": [], "ilc": [], "motion": [], "goal": [], "drac": [], "speed": []},
+            "simple": {"time": [], "ilc": [], "motion": [], "goal": [], "drac": [], "speed": []},
+            "simple.orig": {"time": [], "ilc": [], "motion": [], "goal": [], "drac": [], "speed": []},
+            "twolane": {"time": [], "ilc": [], "motion": [], "reversing": [], "goal": [], "drac": [], "speed": []},
+            "threelane": {"time": [], "ilc": [], "motion": [], "goal": [], "drac": [], "speed": []},
+            "unrealistic": {"time": [], "ilc": [], "motion": [], "goal": [], "drac": [], "speed": []}
         }
 
         total_step = 0
@@ -201,7 +202,8 @@ class ProposedAgent(Agent):
                 "ilc": 0,
                 "motion": 0,
                 "goal": 0,
-                "drac": 0
+                "drac": 0,
+                "speed": 0,
             }
             step = 0
             b_loss_history = []
@@ -400,7 +402,8 @@ class ProposedAgent(Agent):
                 f"{environment}_illegal_lane_change_reward": episode_reward_matrix["ilc"],
                 f"{environment}_smooth_motion_reward": episode_reward_matrix["motion"],
                 f"{environment}_goal_reward": episode_reward_matrix["goal"],
-                f"{environment}_drac_reward": episode_reward_matrix["drac"]
+                f"{environment}_drac_reward": episode_reward_matrix["drac"],
+                f"{environment}_speed_reward": episode_reward_matrix["speed"],
             })
 
             if episode % log_freq == 0:
@@ -446,7 +449,8 @@ class ProposedAgent(Agent):
                 "ilc": 0,
                 "motion": 0,
                 "goal": 0,
-                "drac": 0
+                "drac": 0,
+                "speed": 0,
         }
         terminated = False
 

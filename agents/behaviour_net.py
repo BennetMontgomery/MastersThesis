@@ -85,7 +85,6 @@ class BehaviourNet(tf.keras.Model):
         # pad observations to max_length
         for obs in inputs:
             obs += padding_entry * (maximum_npcs - len(obs))
-            print(len(obs))
 
         static_input = tf.expand_dims(tf.convert_to_tensor([obs[0] for obs in inputs]), axis=1)
         dynamic_inputs = tf.convert_to_tensor([obs[1:] for obs in inputs])

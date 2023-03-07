@@ -259,7 +259,7 @@ class RoundaboutEnv(gym.Env):
             self.ego_goal = libsumo.vehicle_getRoute(self.ego.agentid)[-1]
 
         self.prev_obs = self._get_obs()
-        self.prev_accel_val = 11
+        self.prev_accel_val = 0
         self.last_distance = 0
         return self.prev_obs
 
@@ -272,7 +272,8 @@ class RoundaboutEnv(gym.Env):
                 "ilc": 0,
                 "motion": 0,
                 "goal": 0,
-                "drac":0
+                "drac":0,
+                "speed":0,
             }
 
         reward = 0
@@ -331,10 +332,10 @@ class RoundaboutEnv(gym.Env):
                     self.ego.change_lane(self.target_lane)
         elif behaviour == 2: # follow leader
             # give small reward for not changing lanes
-            reward += 0.1
+            reward += 0.005
             
             if split_reward:
-                reward_matrix["ilc"] += 0.1
+                reward_matrix["ilc"] += 0.005
         elif behaviour != 2:
             raise ValueError("Incorrect first index action value")
 
@@ -344,13 +345,24 @@ class RoundaboutEnv(gym.Env):
 
         if abs(accel_val - self.prev_accel_val) < 5:
             # reward -= abs(accel_val - self.prev_accel_val) # unsmooth motion penalty
-            reward += 0.1
+            reward += 0.01
 
             if split_reward:
-                reward_matrix["motion"] += 0.1
+                reward_matrix["motion"] += 0.01
+        
+        # relog accel
+        self.prev_accel_val = accel_val
         
         # apply throttle decision
         self.ego.change_speed(new_speed, accel_val)
+        
+        # apply speed reward: driving within the speed limit of 50 km/h
+        if abs(new_speed - 14) < 2:
+            reward += 0.005
+            
+            if split_reward:
+                reward_matrix["speed"] += 0.005
+            
 
         # increment simulation
         libsumo.simulationStep()
@@ -369,7 +381,7 @@ class RoundaboutEnv(gym.Env):
             # reward for succesfully exiting goal state
             reward += GOAL_REWARD
             # reward for time taken
-            expected_time = self.last_distance/30
+            expected_time = self.last_distance/13
             
             # grant maximum time reward if minimum expected time taken
             if libsumo.simulation_getTime() <= expected_time:
@@ -400,15 +412,15 @@ class RoundaboutEnv(gym.Env):
 
                 return self.prev_obs, reward, reward_matrix, True, None
 
-            return self.prev_obs, reward, True, None
+            return self.prev_obs, reward, True, None\
 
         # apply drac reward
         for vehicle in libsumo.vehicle_getIDList():
             if libsumo.vehicle_getParameter(vehicle, "device.ssm.maxDRAC") != '':
-                reward += 0.1
+                reward += 0.01
 
                 if split_reward:
-                    reward_matrix["drac"] += 0.1
+                    reward_matrix["drac"] += 0.01
 
         # apply timestep penalty
         # reward += TIMESTEP_REWARD
