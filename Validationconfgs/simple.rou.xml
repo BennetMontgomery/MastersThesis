@@ -5,30 +5,44 @@
 
     <vehicle id="ego" type="agenttype" depart="0">
         <route edges="E1 E-1"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
     </vehicle>
 
     <vehicle id="npc0" type="npctype" depart="2">
         <route edges="RE2 E-3"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
     </vehicle>
 
     <vehicle id="npc1" type="npctype" depart="5">
         <route edges="RE3 E-1"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
     </vehicle>
 
     <vehicle id="npc2" type="npctype" depart="9">
         <route edges="RE2 E-2"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
     </vehicle>
 
     <vehicle id="npc3" type="npctype" depart="11">
         <route edges="E2 E-1"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
     </vehicle>
 
     <vehicle id="npc4" type="npctype" depart="12">
         <route edges="E2 E-1"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
     </vehicle>
 
     <vehicle id="npc5" type="npctype" depart="15">
         <route edges="RE2 E-1"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
     </vehicle>
 
 </routes>

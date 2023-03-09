@@ -4,139 +4,133 @@
     <vType id="npctype" accel="0.8" sigma="0.5" length="5"/>
 
     <vehicle id="ego" type="agenttype" depart="0">
-        <route edges="E3 E-3"/>
+        <route edges="E2 E-3"/>
         <param key="has.ssm.device" value="true"/>
         <param key="device.ssm.measures" value="DRAC"/>
     </vehicle>
 
     <vehicle id="npc0" type="npctype" depart="0">
-        <route edges="RE1 E-3"/>
+        <route edges="E1 E-3"/>
         <param key="has.ssm.device" value="true"/>
         <param key="device.ssm.measures" value="DRAC"/>
     </vehicle>
 
-    <vehicle id="npc1" type="npctype" depart="1">
-        <route edges="RE1 E-1"/>
-        <param key="has.ssm.device" value="true"/>
-        <param key="device.ssm.measures" value="DRAC"/>
-    </vehicle>
-
-    <vehicle id="npc2" type="npctype" depart="2">
-        <route edges="RE3 E-1"/>
-        <param key="has.ssm.device" value="true"/>
-        <param key="device.ssm.measures" value="DRAC"/>
-    </vehicle>
-
-    <vehicle id="npc3" type="npctype" depart="3">
-        <route edges="RE3 E-1"/>
-        <param key="has.ssm.device" value="true"/>
-        <param key="device.ssm.measures" value="DRAC"/>
-    </vehicle>
-
-    <vehicle id="npc4" type="npctype" depart="4">
-        <route edges="RE2 E-2"/>
-        <param key="has.ssm.device" value="true"/>
-        <param key="device.ssm.measures" value="DRAC"/>
-    </vehicle>
-
-    <vehicle id="npc5" type="npctype" depart="5">
-        <route edges="E3 E-3"/>
-        <param key="has.ssm.device" value="true"/>
-        <param key="device.ssm.measures" value="DRAC"/>
-    </vehicle>
-
-    <vehicle id="npc6" type="npctype" depart="8">
-        <route edges="E3 E-2"/>
-        <param key="has.ssm.device" value="true"/>
-        <param key="device.ssm.measures" value="DRAC"/>
-    </vehicle>
-
-    <vehicle id="npc7" type="npctype" depart="9">
-        <route edges="RE2 E-1"/>
-        <param key="has.ssm.device" value="true"/>
-        <param key="device.ssm.measures" value="DRAC"/>
-    </vehicle>
-
-    <vehicle id="npc8" type="npctype" depart="10">
-        <route edges="RE2 E-1"/>
-        <param key="has.ssm.device" value="true"/>
-        <param key="device.ssm.measures" value="DRAC"/>
-    </vehicle>
-
-    <vehicle id="npc9" type="npctype" depart="11">
-        <route edges="RE1 E-1"/>
-        <param key="has.ssm.device" value="true"/>
-        <param key="device.ssm.measures" value="DRAC"/>
-    </vehicle>
-
-    <vehicle id="npc10" type="npctype" depart="12">
-        <route edges="RE3 E-2"/>
-        <param key="has.ssm.device" value="true"/>
-        <param key="device.ssm.measures" value="DRAC"/>
-    </vehicle>
-
-    <vehicle id="npc11" type="npctype" depart="13">
-        <route edges="RE1 E-1"/>
-        <param key="has.ssm.device" value="true"/>
-        <param key="device.ssm.measures" value="DRAC"/>
-    </vehicle>
-
-    <vehicle id="npc12" type="npctype" depart="14">
-        <route edges="E3 E-1"/>
-        <param key="has.ssm.device" value="true"/>
-        <param key="device.ssm.measures" value="DRAC"/>
-    </vehicle>
-
-    <vehicle id="npc13" type="npctype" depart="15">
-        <route edges="RE2 E-3"/>
-        <param key="has.ssm.device" value="true"/>
-        <param key="device.ssm.measures" value="DRAC"/>
-    </vehicle>
-
-    <vehicle id="npc14" type="npctype" depart="16">
-        <route edges="E1 E-2"/>
-        <param key="has.ssm.device" value="true"/>
-        <param key="device.ssm.measures" value="DRAC"/>
-    </vehicle>
-
-    <vehicle id="npc15" type="npctype" depart="17">
-        <route edges="E2 E-2"/>
-        <param key="has.ssm.device" value="true"/>
-        <param key="device.ssm.measures" value="DRAC"/>
-    </vehicle>
-
-    <vehicle id="npc16" type="npctype" depart="18">
+    <vehicle id="npc1" type="npctype" depart="3">
         <route edges="E2 E-1"/>
         <param key="has.ssm.device" value="true"/>
         <param key="device.ssm.measures" value="DRAC"/>
     </vehicle>
 
-    <vehicle id="npc17" type="npctype" depart="19">
+    <vehicle id="npc2" type="npctype" depart="4">
+        <route edges="RE1 E-3"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
+    </vehicle>
+
+    <vehicle id="npc3" type="npctype" depart="5">
+        <route edges="RE3 E-1"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
+    </vehicle>
+
+    <vehicle id="npc4" type="npctype" depart="6">
+        <route edges="RE1 E-3"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
+    </vehicle>
+
+    <vehicle id="npc5" type="npctype" depart="7">
+        <route edges="RE1 E-2"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
+    </vehicle>
+
+    <vehicle id="npc6" type="npctype" depart="8">
+        <route edges="RE1 E-3"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
+    </vehicle>
+
+    <vehicle id="npc7" type="npctype" depart="9">
         <route edges="E1 E-1"/>
         <param key="has.ssm.device" value="true"/>
         <param key="device.ssm.measures" value="DRAC"/>
     </vehicle>
 
-    <vehicle id="npc18" type="npctype" depart="20">
-        <route edges="E3 E-3"/>
+    <vehicle id="npc8" type="npctype" depart="10">
+        <route edges="RE1 E-1"/>
         <param key="has.ssm.device" value="true"/>
         <param key="device.ssm.measures" value="DRAC"/>
     </vehicle>
 
-    <vehicle id="npc19" type="npctype" depart="21">
+    <vehicle id="npc9" type="npctype" depart="11">
+        <route edges="E1 E-1"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
+    </vehicle>
+
+    <vehicle id="npc10" type="npctype" depart="12">
+        <route edges="RE3 E-3"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
+    </vehicle>
+
+    <vehicle id="npc11" type="npctype" depart="13">
+        <route edges="RE3 E-3"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
+    </vehicle>
+
+    <vehicle id="npc12" type="npctype" depart="14">
+        <route edges="E1 E-1"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
+    </vehicle>
+
+    <vehicle id="npc13" type="npctype" depart="15">
         <route edges="RE2 E-2"/>
         <param key="has.ssm.device" value="true"/>
         <param key="device.ssm.measures" value="DRAC"/>
     </vehicle>
 
-    <vehicle id="npc20" type="npctype" depart="22">
-        <route edges="RE3 E-2"/>
+    <vehicle id="npc14" type="npctype" depart="17">
+        <route edges="E1 E-3"/>
         <param key="has.ssm.device" value="true"/>
         <param key="device.ssm.measures" value="DRAC"/>
     </vehicle>
 
-    <vehicle id="npc21" type="npctype" depart="23">
+    <vehicle id="npc15" type="npctype" depart="18">
+        <route edges="E3 E-3"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
+    </vehicle>
+
+    <vehicle id="npc16" type="npctype" depart="19">
         <route edges="RE1 E-3"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
+    </vehicle>
+
+    <vehicle id="npc17" type="npctype" depart="20">
+        <route edges="RE1 E-1"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
+    </vehicle>
+
+    <vehicle id="npc18" type="npctype" depart="21">
+        <route edges="RE2 E-1"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
+    </vehicle>
+
+    <vehicle id="npc19" type="npctype" depart="22">
+        <route edges="RE2 E-1"/>
+        <param key="has.ssm.device" value="true"/>
+        <param key="device.ssm.measures" value="DRAC"/>
+    </vehicle>
+
+    <vehicle id="npc20" type="npctype" depart="23">
+        <route edges="E2 E-3"/>
         <param key="has.ssm.device" value="true"/>
         <param key="device.ssm.measures" value="DRAC"/>
     </vehicle>
