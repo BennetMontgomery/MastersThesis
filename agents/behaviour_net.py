@@ -29,12 +29,15 @@ class BehaviourNet(tf.keras.Model):
         self.encoder = Encoder(attention_in_d, attention_heads, attention_out_ff, dropout_rate, variable_input_size)
         
         # static embedder
-        self.static_embedder = tf.keras.layers.Embedding(200, attention_in_d, mask_zero=True)
+        # self.static_embedder = tf.keras.layers.Embedding(200, attention_in_d, mask_zero=False)
+        
+        # flattener
+        self.flattener = tf.keras.layers.Flatten()
 
         # Q subnet
         # self.q_subnet = DQN(q_layers, input_s=((static_input_size*2)*attention_in_d,))
         self.q_subnet = tf.keras.Sequential([
-            tf.keras.layers.Flatten(),
+            # tf.keras.layers.Flatten(),
             tf.keras.layers.Dense(256, activation="relu"),
             tf.keras.layers.Dense(128, activation="relu"),
             tf.keras.layers.Dense(q_layers[-1]),
@@ -86,15 +89,18 @@ class BehaviourNet(tf.keras.Model):
         for obs in inputs:
             obs += padding_entry * (maximum_npcs - len(obs))
 
-        static_input = tf.expand_dims(tf.convert_to_tensor([obs[0] for obs in inputs]), axis=1)
+        # static_input = tf.expand_dims(tf.convert_to_tensor([obs[0] for obs in inputs]), axis=1)
+        static_input = tf.convert_to_tensor([obs[0] for obs in inputs])
         dynamic_inputs = tf.convert_to_tensor([obs[1:] for obs in inputs])
 
-        static_input = self.static_embedder(static_input)
+        # static_input = self.static_embedder(static_input)
 
         # encode dynamic inputs
         encoded = self.encoder(dynamic_inputs, training=training, mask=attention_mask)
 
         # call q network
+        # concatenate input
+        encoded = self.flattener(encoded)
         q_input = tf.concat([static_input, encoded], 1)
 
         if VERBOSE:
