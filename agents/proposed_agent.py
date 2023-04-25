@@ -91,11 +91,11 @@ class ProposedAgent(Agent):
         # UNIVERSAL HYPERPARAMS
         log_freq = 10 # number of rounds between printing of loss and other ML statistics
         optimizer = tf.optimizers.Adam(alpha)
-        checkpoint_freq = 100
+        checkpoint_freq = 5
 
         # BEHAVIOUR SPECIFIC HYPERPARAMS
         b_q_layers = [256, 128, b_action_space_size] # layer parameters in the behavioural q network
-        update_freq_b = 100 # number of rounds between updates to the target q bnet
+        update_freq_b = 75 # number of rounds between updates to the target q bnet
         encoder_layer_b = 256 # width of the attention embeddings
         encoder_feed_forward_b = 128 # width of the attention post-processing network
         pooler_layers_b = encoder_layer_b # width and depth of the seq-2-vec processing network
@@ -104,7 +104,7 @@ class ProposedAgent(Agent):
         # THROTTLE SPECIFIC HYPERPARAMS
         t_action_space_size = 22
         t_q_layers = [256, 128, t_action_space_size]  # layer parameters in the throttle q network
-        update_freq_t = 100  # number of rounds between updates to the target q tnet
+        update_freq_t = 75  # number of rounds between updates to the target q tnet
         num_heads_t = 8  # number of attention heads
         encoder_layer_t = 256  # width of the attention embeddings
         encoder_feed_forward_t = 128  # width of the attention post-processing network
@@ -380,9 +380,9 @@ class ProposedAgent(Agent):
 
             reward_history[episode] = episode_return
             average_reward = reward_history[max(0, episode - 100):(episode+1)].mean()
-            env_wise_average_reward = np.asarray(env_wise_reward_history[environment][max(0, episode-100):(episode+1)]).mean()
-
+            
             env_wise_reward_history[environment].append(episode_return)
+            env_wise_average_reward = np.asarray(env_wise_reward_history[environment][max(0, episode-100):(episode+1)]).mean()
 
             for key in episode_reward_matrix.keys():
                 env_wise_matrix_history[environment][key].append(episode_reward_matrix[key])
@@ -396,6 +396,8 @@ class ProposedAgent(Agent):
                 "illegal_lane_change_reward": episode_reward_matrix["ilc"],
                 "smooth_motion_reward": episode_reward_matrix["motion"],
                 "goal_reward": episode_reward_matrix["goal"],
+                "drac_reward": episode_reward_matrix["drac"],
+                "speed_reward": episode_reward_matrix["speed"],
                 f"{environment}_past_average_reward": env_wise_average_reward,
                 f"{environment}_aggregate_episode_reward": episode_return,
                 f"{environment}_time_reward": episode_reward_matrix["time"],
@@ -499,7 +501,7 @@ class ProposedAgent(Agent):
         plt.savefig(f"{MODEL_DIR}/{time}_{time_step}/{time}_{time_step} average.png")
         plt.close()
 
-    def select_action(self, time_step: list[list[float]]):
+    def select_action(self, time_step):
         # actions may not be selected without training
         if (self.throttle_net is None) or (self.behaviour_net is None):
             raise RuntimeError("[!!] Throttle net and Behaviour net must be trained or loaded before calling select_action.")
