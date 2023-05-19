@@ -36,12 +36,17 @@ class BehaviourNet(tf.keras.Model):
 
         # Q subnet
         # self.q_subnet = DQN(q_layers, input_s=((static_input_size*2)*attention_in_d,))
-        self.q_subnet = tf.keras.Sequential([
-            # tf.keras.layers.Flatten(),
-            tf.keras.layers.Dense(256, activation="relu"),
-            tf.keras.layers.Dense(128, activation="relu"),
-            tf.keras.layers.Dense(q_layers[-1]),
-        ])
+        # self.q_subnet = tf.keras.Sequential([
+        #     # tf.keras.layers.Flatten(),
+        #     tf.keras.layers.Dense(256, activation="relu"),
+        #     tf.keras.layers.Dense(128, activation="relu"),
+        #     tf.keras.layers.Dense(q_layers[-1]),
+        # ])
+        self.q_subnet = tf.keras.Sequential()
+        for params in q_layers[:-1]:
+            self.q_subnet.add(tf.keras.layers.Dense(params, activation="relu"))
+        
+        self.q_subnet.add(tf.keras.layers.Dense(q_layers[-1]))
 
         # build memory buffer
         self.replay_manager = ReplayManager(replay_cap=memory_cap)

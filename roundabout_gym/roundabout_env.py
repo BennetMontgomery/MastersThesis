@@ -50,6 +50,7 @@ class RoundaboutEnv(gym.Env):
         self.npc_depart_times = []
 
         self.network = None
+        self.networks = []
 
 
 
@@ -150,11 +151,13 @@ class RoundaboutEnv(gym.Env):
 
         ''' Open configuration files and select roundabout model '''
         sumoconfigs = os.listdir("{configs}".format(configs=CONFIGS_PATH))
-        networks = [entry for entry in sumoconfigs if entry.endswith(".net.xml")]
+        if len(self.networks) == 0:
+            self.networks = [entry for entry in sumoconfigs if entry.endswith(".net.xml")]
 
         # select random network
         if options is None:
-            self.network = random.choice(networks)
+            self.network = random.choice(self.networks)
+            self.networks.remove(self.network)
             route = "{net}rou.xml".format(net=self.network[:-7])
             num_npcs_0 = 0
         else:

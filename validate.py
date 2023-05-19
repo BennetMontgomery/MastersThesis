@@ -1,6 +1,7 @@
 from agents.proposed_agent import ProposedAgent
 from os import listdir
 import matplotlib.pyplot as plt
+import libsumo
 
 ego = ProposedAgent(
     agentid='ego',
@@ -13,7 +14,7 @@ SAVE_TXT = True
 validation_folder = './Validationconfgs/'
 model_folder = './models/'
 
-network_range = ["2023-04-20 19:19:53.228604_0", "2023-04-21 06:49:06.071330_final"]
+network_range = ["2023-05-18 15:29:35.410584_0", "2023-05-19 05:17:14.421399_final"]
 
 # networks = [
 #     "2023-03-27 19:15:40.016768_0",
@@ -144,6 +145,10 @@ def graphically_validate(confg_idx=0, network="2022-11-14 19:05:20.309803_100"):
     reward, reward_matrix = ego.validate(configs[confg_idx], validation_folder, npcs=npcs[confg_idx], network=network, graphical_mode=True, split_reward=True)
 
     return reward, reward_matrix
+
+
+def sumo_score(sigma):
+    
 
 # print(graphically_validate(3, "2022-11-16 02:50:48.228403_1900"))
 plot_validate()
