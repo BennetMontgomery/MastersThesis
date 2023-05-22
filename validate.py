@@ -14,7 +14,7 @@ SAVE_TXT = True
 validation_folder = './Validationconfgs/'
 model_folder = './models/'
 
-network_range = ["2023-05-18 15:29:35.410584_0", "2023-05-19 05:17:14.421399_final"]
+# network_range = ["2023-05-18 15:29:35.410584_0", "2023-05-19 05:17:14.421399_final"]
 
 # networks = [
 #     "2023-03-27 19:15:40.016768_0",
@@ -74,12 +74,12 @@ network_range = ["2023-05-18 15:29:35.410584_0", "2023-05-19 05:17:14.421399_fin
 #     # "2023-04-12 09:05:20.368692_final"
 # ]
 
-networks = listdir(model_folder)
-networks.sort()
-networks = networks[networks.index(network_range[0]):networks.index(network_range[1]) + 1]
+# networks = listdir(model_folder)
+# networks.sort()
+# networks = networks[networks.index(network_range[0]):networks.index(network_range[1]) + 1]
 
 # domain = [i*100 for i in range(0, 21)]
-domain = [i*100 for i in range(len(networks))]
+# domain = [i*100 for i in range(len(networks))]
 configs=[
     "magic.net.xml",
     "simple.net.xml",
@@ -89,7 +89,7 @@ configs=[
 ]
 npcs=[
     # [i for i in range(0, 23)],
-    [2, 5, 9, 11, 12, 15],
+    [1, 2, 4, 15],
     [2, 5, 9, 11, 12, 15],
     [i for i in range(0, 24)],
     # [2, 5, 9, 11, 12, 15],
@@ -148,7 +148,124 @@ def graphically_validate(confg_idx=0, network="2022-11-14 19:05:20.309803_100"):
 
 
 def sumo_score(sigma):
-    
+    rewards = []
+    rewards_matrix = {
+        "time": [],
+        "ilc": [],
+        "motion": [],
+        "goal": [],
+        # "drac": [],
+        "speed": [],
+    }
+
+    for i in range(len(configs)):
+        # initiate simulation
+        libsumo.start(["sumo", "-c", f"{validation_folder}{configs[i][:-7]}sumocfg", "--lateral-resolution=3.0"])
+
+        print(f"{validation_folder}{configs[i][:-7]}sumocfg")
+
+        # reroute vehicles
+        libsumo.vehicle_rerouteTraveltime("ego")
+        print(libsumo.vehicle_getRoute("ego"))
+        libsumo.vehicletype_setImperfection("agenttype", sigma)
+        for npc in range(len(npcs[i])):
+            if npcs[i][npc] == 0:
+                libsumo.vehicle_rerouteTraveltime(f"npc{npc}")
+
+        # step through simulation
+        libsumo.simulationStep()
+
+        # initial speed
+        old_speed = libsumo.vehicle_getSpeed("ego")
+
+        # initial lane
+        old_lane = libsumo.vehicle_getLaneIndex("ego")
+
+        terminated = False
+        step = 0
+        reward = 0
+        reward_matrix = {
+            "time": 0,
+            "ilc": 0,
+            "motion": 0,
+            "goal": 0,
+            # "drac": 0,
+            "speed": 0,
+        }
+        while not terminated:
+
+            # reroute vehicles appearing in this time step
+            if step+1 in npcs[i]:
+                testindex = npcs[i].index(step+1)
+                libsumo.vehicle_rerouteTraveltime(f"npc{testindex}")
+
+            # deduce action
+            action = [0, 0]
+            new_lane = libsumo.vehicle_getLaneIndex("ego")
+            if new_lane > old_lane:
+                action[0] = 0
+            elif new_lane > old_lane:
+                action[0] = 1
+            else:
+                action[0] = 2
+
+            new_speed = libsumo.vehicle_getSpeed("ego")
+            action[1] = ((new_speed - old_speed) - 14)/2
+
+            # calculate reward
+            # time
+            reward -= 5
+            reward_matrix["time"] -= 5
+
+            # lane change
+            reward -= 5 if action[0] != 2 else 0
+            reward_matrix["ilc"] -= 5 if action[0] != 2 else 0
+
+            # motion
+            reward -= 8 if abs(new_speed - old_speed) > 3 else 0
+
+            # speed
+            if new_speed > 0 or new_speed < -13:
+                reward += 15 * (min(new_speed / 13, 13 / new_speed) - 1)
+                reward_matrix["speed"] += 15 * (min(new_speed / 13, 13 / new_speed) - 1)
+            else:
+                reward += 15 * ((new_speed / 13) - 1)
+                reward_matrix["speed"] += 15 * ((new_speed / 13) - 1)
+
+            libsumo.simulationStep()
+
+            # goal
+            # - timeout
+            if libsumo.simulation_getTime() > 100:
+                reward -= 300
+                reward_matrix["goal"] -= 300
+                terminated = True
+                break
+            # - collision
+            elif "ego" in libsumo.simulation_getCollidingVehiclesIDList():
+                reward -= 200
+                reward_matrix["goal"] -= 200
+                terminated = True
+                break
+            # - reaching goal
+            elif "ego" not in libsumo.vehicle_getIDList():
+                reward += 100
+                reward_matrix["goal"] += 100
+                terminated = True
+                break
+
+            old_speed = new_speed
+            old_lane = new_lane
+            step += 1
+
+        rewards.append(reward)
+        for key in reward_matrix.keys():
+            rewards_matrix[key].append(reward_matrix[key])
+
+        libsumo.close()
+
+    return rewards, rewards_matrix
 
 # print(graphically_validate(3, "2022-11-16 02:50:48.228403_1900"))
-plot_validate()
+# plot_validate()
+sumo_score(0.5)
