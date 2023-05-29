@@ -13,10 +13,10 @@ NPC_TYPE = ['"npctype"', '"0.8"', '"5"', '"14"']
 MIN_NPCS = minimum_npcs
 MAX_NPCS = maximum_npcs
 COLLISION_REWARD = collision_reward
-GOAL_REWARD = goal_reward
+GOAL_REWARD = 100
 TIMEOUT = 100
 # TIMEOUT_REWARD = -10
-TIMESTEP_REWARD = time_step_reward
+TIMESTEP_REWARD = -5
 ILLEGAL_LANE_CHANGE_REWARD = illegal_lane_change_reward
 SPAWN_TIME_RANGE = spawn_time_range
 EXIT_REWARD = exit_reward
@@ -275,7 +275,7 @@ class RoundaboutEnv(gym.Env):
                 "ilc": 0,
                 "motion": 0,
                 "goal": 0,
-                "drac":0,
+                # "drac":0,
                 "speed":0,
             }
 
@@ -315,6 +315,10 @@ class RoundaboutEnv(gym.Env):
                     self.source_lane = libsumo.vehicle_getLaneIndex(self.ego.agentid)
                     self.target_lane = libsumo.vehicle_getLaneIndex(self.ego.agentid) + 1
                     self.ego.change_lane(self.target_lane)
+                
+                reward -= 5
+                if split_reward:
+                    reward_matrix["ilc"] -= 5
         elif behaviour == 1: # change lane right
             # sanity check: only change lanes if a lane exists
             if libsumo.vehicle_getLaneIndex(self.ego.agentid) > 0:
@@ -333,14 +337,18 @@ class RoundaboutEnv(gym.Env):
                     self.source_lane = libsumo.vehicle_getLaneIndex(self.ego.agentid)
                     self.target_lane = libsumo.vehicle_getLaneIndex(self.ego.agentid) - 1
                     self.ego.change_lane(self.target_lane)
-        elif behaviour == 2: # follow leader
-            # give small reward for not changing lanes
-            #reward += 0.5
-            reward += 5
+                
+                reward -= 5
+                if split_reward:
+                    reward_matrix["ilc"] -= 5
+#         elif behaviour == 2: # follow leader
+#             # give small reward for not changing lanes
+#             #reward += 0.5
+#             # reward += 5
             
-            if split_reward:
-                # reward_matrix["ilc"] += 0.5
-                reward_matrix["ilc"] += 5
+#             if split_reward:
+#                 # reward_matrix["ilc"] += 0.5
+#                 reward_matrix["ilc"] += 5
         elif behaviour != 2:
             raise ValueError("Incorrect first index action value")
 
@@ -348,12 +356,22 @@ class RoundaboutEnv(gym.Env):
         accel_val = (throttle - 14)/2
         new_speed = libsumo.vehicle_getSpeed(self.ego.agentid) + accel_val
 
-        if abs(accel_val - self.prev_accel_val) < 5:
+        if abs(accel_val - self.prev_accel_val) > 3:
             # reward -= abs(accel_val - self.prev_accel_val) # unsmooth motion penalty
-            reward += 8
+            reward -= 8
 
             if split_reward:
-                reward_matrix["motion"] += 8
+                reward_matrix["motion"] -= 8
+        elif abs(accel_val - self.prev_accel_val) > 2:
+            reward -= 4
+            
+            if split_reward:
+                reward_matrix["motion"] -= 4
+        elif abs(accel_val - self.prev_accel_val) > 1:
+            reward -= 2
+            
+            if split_reward:
+                reward_matrix["motion"] -= 2
         
         # relog accel
         self.prev_accel_val = accel_val
@@ -367,11 +385,16 @@ class RoundaboutEnv(gym.Env):
             
 #             if split_reward:
 #                 reward_matrix["speed"] += 0.5
-        try:
-            speed_reward = 15*max(0, min(new_speed/13, 13/new_speed))
-        except ZeroDivisionError:
-            speed_reward = 0
+        # try:
+        #     speed_reward = 15*max(0, min(new_speed/13, 13/new_speed))
+        # except ZeroDivisionError:
+        #     speed_reward = 0
         
+        if new_speed > 0 or new_speed < -13:
+            speed_reward = 15*(min(new_speed/13, 13/new_speed)-1)
+        else:
+            speed_reward = 15*((new_speed/13) - 1)
+            
         reward += speed_reward
         
         if split_reward:
@@ -384,8 +407,8 @@ class RoundaboutEnv(gym.Env):
         if self.ego.agentid in libsumo.simulation_getCollidingVehiclesIDList():
             # terminate with 0 goal and time rewards
             if split_reward:
-                reward_matrix["goal"] += 0
-                reward_matrix["time"] = 0
+                reward_matrix["goal"] += -100
+                reward_matrix["time"] = -100
                 
                 return self.prev_obs, reward, reward_matrix, True, None
 
@@ -394,19 +417,19 @@ class RoundaboutEnv(gym.Env):
             # reward for succesfully exiting goal state
             reward += GOAL_REWARD
             # reward for time taken
-            expected_time = self.last_distance/13
+            # expected_time = self.last_distance/13
             
-            # grant maximum time reward if minimum expected time taken
-            if libsumo.simulation_getTime() <= expected_time:
-                time_reward = 100*GOAL_REWARD
-            else:
-                time_reward = 100*(expected_time*(10/11))/(libsumo.simulation_getTime() - (expected_time*(10/11)))
+#             # grant maximum time reward if minimum expected time taken
+#             if libsumo.simulation_getTime() <= expected_time:
+#                 time_reward = 100*GOAL_REWARD
+#             else:
+#                 time_reward = 100*(expected_time*(10/11))/(libsumo.simulation_getTime() - (expected_time*(10/11)))
 
-            reward += time_reward
+#             reward += time_reward
                                                        
             if split_reward:
                 reward_matrix["goal"] += GOAL_REWARD
-                reward_matrix["time"] += time_reward           
+                # reward_matrix["time"] += time_reward           
 
                 return self.prev_obs, reward, reward_matrix, True, None
 
@@ -419,24 +442,28 @@ class RoundaboutEnv(gym.Env):
             return self.prev_obs, reward, True, None
         elif libsumo.simulation_getTime() > TIMEOUT:
             # reward for getting stuck
+            reward += -300
 
             if split_reward:
-                reward_matrix["time"] = 0
+                reward_matrix["goal"] = -300
 
                 return self.prev_obs, reward, reward_matrix, True, None
 
             return self.prev_obs, reward, True, None\
 
         # apply drac reward
-        for vehicle in libsumo.vehicle_getIDList():
-            if libsumo.vehicle_getParameter(vehicle, "device.ssm.maxDRAC") != '':
-                reward += 1
+#         for vehicle in libsumo.vehicle_getIDList():
+#             if libsumo.vehicle_getParameter(vehicle, "device.ssm.maxDRAC") == '':
+#                 reward -= 1
 
-                if split_reward:
-                    reward_matrix["drac"] += 1
+#                 if split_reward:
+#                     reward_matrix["drac"] -= 1
 
         # apply timestep penalty
-        # reward += TIMESTEP_REWARD
+        reward += TIMESTEP_REWARD
+        
+        if split_reward:
+            reward_matrix["time"] += TIMESTEP_REWARD
 
         self.prev_obs = self._get_obs()
         self.last_distance = libsumo.vehicle_getDistance(self.ego.agentid)

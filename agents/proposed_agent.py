@@ -117,7 +117,7 @@ class ProposedAgent(Agent):
         # UNIVERSAL HYPERPARAMS
         log_freq = 10 # number of rounds between printing of loss and other ML statistics
         optimizer = tf.optimizers.Adam(alpha)
-        checkpoint_freq = 5
+        checkpoint_freq = 10
 
 #         # BEHAVIOUR SPECIFIC HYPERPARAMS
 #         b_q_layers = [256, 128, b_action_space_size] # layer parameters in the behavioural q network
@@ -241,17 +241,17 @@ class ProposedAgent(Agent):
             "ilc": np.empty(episodes),
             "motion": np.empty(episodes),
             "goal": np.empty(episodes),
-            "drac": np.empty(episodes),
+            # "drac": np.empty(episodes),
             "speed": np.empty(episodes)
         }
         env_wise_reward_history = {"magic": [], "simple": [], "simple.orig": [], "twolane": [], "threelane": [], "unrealistic": []}
         env_wise_matrix_history = {
-            "magic": {"time": [], "ilc": [], "motion": [], "goal": [], "drac": [], "speed": []},
-            "simple": {"time": [], "ilc": [], "motion": [], "goal": [], "drac": [], "speed": []},
-            "simple.orig": {"time": [], "ilc": [], "motion": [], "goal": [], "drac": [], "speed": []},
-            "twolane": {"time": [], "ilc": [], "motion": [], "reversing": [], "goal": [], "drac": [], "speed": []},
-            "threelane": {"time": [], "ilc": [], "motion": [], "goal": [], "drac": [], "speed": []},
-            "unrealistic": {"time": [], "ilc": [], "motion": [], "goal": [], "drac": [], "speed": []}
+            "magic": {"time": [], "ilc": [], "motion": [], "goal": [], "speed": []},
+            "simple": {"time": [], "ilc": [], "motion": [], "goal": [], "speed": []},
+            "simple.orig": {"time": [], "ilc": [], "motion": [], "goal": [], "speed": []},
+            "twolane": {"time": [], "ilc": [], "motion": [], "reversing": [], "goal": [], "speed": []},
+            "threelane": {"time": [], "ilc": [], "motion": [], "goal": [], "speed": []},
+            "unrealistic": {"time": [], "ilc": [], "motion": [], "goal": [], "speed": []}
         }
 
         total_step = 0
@@ -271,7 +271,7 @@ class ProposedAgent(Agent):
                 "ilc": 0,
                 "motion": 0,
                 "goal": 0,
-                "drac": 0,
+                # "drac": 0,
                 "speed": 0,
             }
             step = 0
@@ -467,7 +467,7 @@ class ProposedAgent(Agent):
                 "illegal_lane_change_reward": episode_reward_matrix["ilc"],
                 "smooth_motion_reward": episode_reward_matrix["motion"],
                 "goal_reward": episode_reward_matrix["goal"],
-                "drac_reward": episode_reward_matrix["drac"],
+                #"drac_reward": episode_reward_matrix["drac"],
                 "speed_reward": episode_reward_matrix["speed"],
                 f"{environment}_past_average_reward": env_wise_average_reward,
                 f"{environment}_aggregate_episode_reward": episode_return,
@@ -475,7 +475,7 @@ class ProposedAgent(Agent):
                 f"{environment}_illegal_lane_change_reward": episode_reward_matrix["ilc"],
                 f"{environment}_smooth_motion_reward": episode_reward_matrix["motion"],
                 f"{environment}_goal_reward": episode_reward_matrix["goal"],
-                f"{environment}_drac_reward": episode_reward_matrix["drac"],
+                # f"{environment}_drac_reward": episode_reward_matrix["drac"],
                 f"{environment}_speed_reward": episode_reward_matrix["speed"],
             })
 
@@ -522,7 +522,7 @@ class ProposedAgent(Agent):
                 "ilc": 0,
                 "motion": 0,
                 "goal": 0,
-                "drac": 0,
+                # "drac": 0,
                 "speed": 0,
         }
         terminated = False
