@@ -534,6 +534,7 @@ class ProposedAgent(Agent):
             for feature in t_obs[1:]:
                 feature.append(0)
             t_action = np.argmax(self.throttle_net(t_obs))
+            print(t_action)
 
             if split_reward:
                 next_state, reward, reward_matrix, terminated, _ = self.eval_env.step([b_action, t_action], split_reward=True)
@@ -548,6 +549,9 @@ class ProposedAgent(Agent):
                     episode_return_matrix[key] += reward_matrix[key]
 
             curr_state = self.flatten_obs(next_state)
+
+        self.behaviour_net.summary()
+        self.throttle_net.summary()
 
         if split_reward:
             return episode_return, episode_return_matrix

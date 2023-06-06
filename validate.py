@@ -14,14 +14,14 @@ SAVE_TXT = True
 validation_folder = './Validationconfgs/'
 model_folder = './models/'
 
-network_range = ["2023-05-21 17:45:03.610686_0", "2023-05-22 06:08:18.506414_final"]
+network_range = ["2023-05-22 06:08:18.506414_final", "2023-05-22 06:08:18.506414_final"]
 
 networks = listdir(model_folder)
 networks.sort()
 networks = networks[networks.index(network_range[0]):networks.index(network_range[1]) + 1]
 
-domain = [i*10 for i in range(len(networks))]
-
+# domain = [i*100 for i in range(0, 21)]
+domain = [i*100 for i in range(len(networks))]
 configs=[
     "magic.net.xml",
     "simple.net.xml",
@@ -79,9 +79,12 @@ def plot_validate():
                 file = open(f"{configs[i]}_reward_for_{key}_over time.txt", "w")
                 file.writelines(list(map(lambda a : str(a) + '\n', rewards_matrix[key])))
                 file.close()
+
+        print(rewards)
+        print(rewards_matrix)
             
 
-def graphically_validate(confg_idx=0, network="2022-11-14 19:05:20.309803_100"):
+def graphically_validate(confg_idx=1, network="2023-05-22 06:08:18.506414_final"):
     reward, reward_matrix = ego.validate(configs[confg_idx], validation_folder, npcs=npcs[confg_idx], network=network, graphical_mode=True, split_reward=True)
 
     return reward, reward_matrix
@@ -102,8 +105,11 @@ def sumo_score(sigma):
         # initiate simulation
         libsumo.start(["sumo", "-c", f"{validation_folder}{configs[i][:-7]}sumocfg", "--lateral-resolution=3.0"])
 
+        print(f"{validation_folder}{configs[i][:-7]}sumocfg")
+
         # reroute vehicles
         libsumo.vehicle_rerouteTraveltime("ego")
+        print(libsumo.vehicle_getRoute("ego"))
         libsumo.vehicletype_setImperfection("agenttype", sigma)
         for npc in range(len(npcs[i])):
             if npcs[i][npc] == 0:
@@ -203,16 +209,6 @@ def sumo_score(sigma):
 
     return rewards, rewards_matrix
 
-# print(graphically_validate(3, "2022-11-16 02:50:48.228403_1900"))
-# plot_validate()
-test_scores = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-for score in test_scores:
-    print(f"Scores for imperfection {score}")
-    rewards, rewards_matrix = sumo_score(score)
-    print("AGGREGATE")
-    print(rewards)
-    print("MEAN")
-    print(sum(rewards)/len(rewards))
-    print("SPLIT")
-    print(rewards_matrix)
-    print('')
+print(graphically_validate(confg_idx=0))
+#plot_validate()
+# sumo_score(0.5)

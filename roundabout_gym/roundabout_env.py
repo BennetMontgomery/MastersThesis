@@ -75,6 +75,9 @@ class RoundaboutEnv(gym.Env):
 
         self.ego_last_edge = libsumo.vehicle_getRoadID(self.ego.agentid)
 
+        # refresh view
+        self.ego.refresh_view()
+
         obs = {
             "number": len(self.ego.view),
             "speed": libsumo.vehicle_getSpeed(self.ego.agentid),
@@ -250,6 +253,7 @@ class RoundaboutEnv(gym.Env):
 
         # trigger rerouting
         libsumo.vehicle_rerouteTraveltime(self.ego.agentid)
+        libsumo.vehicle.setSpeedMode(self.ego.agentid, 32)
         for i in range(num_npcs_0):
             libsumo.vehicle_rerouteTraveltime("npc{num}".format(num=i))
 
