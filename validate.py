@@ -14,7 +14,7 @@ SAVE_TXT = True
 validation_folder = './Validationconfgs/'
 model_folder = './models/'
 
-network_range = ["2023-05-22 06:08:18.506414_final", "2023-05-22 06:08:18.506414_final"]
+network_range = ["2023-06-06 20:50:03.308588_final", "2023-06-06 20:50:03.308588_final"]
 
 networks = listdir(model_folder)
 networks.sort()
@@ -84,7 +84,7 @@ def plot_validate():
         print(rewards_matrix)
             
 
-def graphically_validate(confg_idx=1, network="2023-05-22 06:08:18.506414_final"):
+def graphically_validate(confg_idx=1, network="2023-06-06 20:50:03.308588_final"):
     reward, reward_matrix = ego.validate(configs[confg_idx], validation_folder, npcs=npcs[confg_idx], network=network, graphical_mode=True, split_reward=True)
 
     return reward, reward_matrix
@@ -176,6 +176,7 @@ def sumo_score(sigma):
                 reward_matrix["speed"] += 15 * ((new_speed / 13) - 1)
 
             libsumo.simulationStep()
+            print(libsumo.simulation_getCollidingVehiclesIDList())
 
             # goal
             # - timeout

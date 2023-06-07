@@ -1,6 +1,7 @@
 # IMPORTS
 import os
 
+import libsumo
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
@@ -538,6 +539,8 @@ class ProposedAgent(Agent):
 
             if split_reward:
                 next_state, reward, reward_matrix, terminated, _ = self.eval_env.step([b_action, t_action], split_reward=True)
+                print(libsumo.simulation_getCollidingVehiclesIDList())
+
             else:
                 next_state, reward, terminated, _ = self.eval_env.step([b_action, t_action])
 

@@ -255,12 +255,14 @@ class RoundaboutEnv(gym.Env):
             libsumo.start(["{render}".format(render="sumo" if self.render_mode == "cli" else "sumo-gui"),
                            "-c",
                            "{configs}{config}sumocfg".format(configs=CONFIGS_PATH, config=self.network[:-7]),
-                           "--lateral-resolution=3.0"])
+                           "--lateral-resolution=3.0",
+                           "--collision.check-junctions"])
         else:
             libsumo.start(["{render}".format(render="sumo" if self.render_mode == "cli" else "sumo-gui"),
                            "-c",
                            "{configs}{config}sumocfg".format(configs=options[1], config=self.network[:-7]),
-                           "--lateral-resolution=3.0"])
+                           "--lateral-resolution=3.0",
+                           "--collision.check-junctions"])
 
         # trigger rerouting
         libsumo.vehicle_rerouteTraveltime(self.ego.agentid)
@@ -371,18 +373,18 @@ class RoundaboutEnv(gym.Env):
         accel_val = (throttle - 14)/2
         new_speed = libsumo.vehicle_getSpeed(self.ego.agentid) + accel_val
 
-        if abs(accel_val - self.prev_accel_val) > 3:
+        if abs(accel_val) > 3:
             # reward -= abs(accel_val - self.prev_accel_val) # unsmooth motion penalty
             reward -= 8
 
             if split_reward:
                 reward_matrix["motion"] -= 8
-        elif abs(accel_val - self.prev_accel_val) > 2:
+        elif abs(accel_val) > 2:
             reward -= 4
             
             if split_reward:
                 reward_matrix["motion"] -= 4
-        elif abs(accel_val - self.prev_accel_val) > 1:
+        elif abs(accel_val) > 1:
             reward -= 2
             
             if split_reward:
@@ -420,10 +422,10 @@ class RoundaboutEnv(gym.Env):
 
         # check if now in terminal state
         if self.ego.agentid in libsumo.simulation_getCollidingVehiclesIDList():
-            # terminate with 0 goal and time rewards
+            reward -= 500
+
             if split_reward:
-                reward_matrix["goal"] += -400
-                reward_matrix["time"] = -100
+                reward_matrix["goal"] += -500
                 
                 return self.prev_obs, reward, reward_matrix, True, None
 
@@ -450,8 +452,12 @@ class RoundaboutEnv(gym.Env):
 
             return self.prev_obs, reward, True, None
         elif self.ego.agentid not in libsumo.vehicle_getIDList():
-            # reward for exiting system without reaching goal
+            # reward for exiting system without reaching goal (may also be caused by undetected collision
+            reward -= 500
+
             if split_reward:
+                reward_matrix["goal"] -= 500
+
                 return self.prev_obs, reward, reward_matrix, True, None
 
             return self.prev_obs, reward, True, None
