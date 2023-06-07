@@ -112,16 +112,27 @@ class RoundaboutEnv(gym.Env):
             for i in range(len(target_edges)):
                 target_edges[i] = target_edges[i].split("_")[0]
 
-            vehicle_list.append({vehicle + str(self.ego.view.index(vehicle)): {
-                "speed": libsumo.vehicle_getSpeed(vehicle),
-                "laneid": libsumo.vehicle_getLaneIndex(vehicle),
-                "lanepos": libsumo.vehicle_getLanePosition(vehicle),
-                "inedge": 1 if libsumo.vehicle_getRoadID(vehicle) == libsumo.vehicle_getRoadID(self.ego.agentid) else 0,
-                "intarget": 1 if libsumo.vehicle_getRoadID(vehicle) ==
-                                libsumo.vehicle_getRoute(self.ego.agentid)[libsumo.vehicle_getRouteIndex(self.ego.agentid)+1] else 0,
-                "insource": 1 if libsumo.vehicle_getRoute(self.ego.agentid)[libsumo.vehicle_getRouteIndex(self.ego.agentid)+1]
-                                in target_edges else 0
-            }})
+            try:
+                vehicle_list.append({vehicle + str(self.ego.view.index(vehicle)): {
+                    "speed": libsumo.vehicle_getSpeed(vehicle),
+                    "laneid": libsumo.vehicle_getLaneIndex(vehicle),
+                    "lanepos": libsumo.vehicle_getLanePosition(vehicle),
+                    "inedge": 1 if libsumo.vehicle_getRoadID(vehicle) == libsumo.vehicle_getRoadID(self.ego.agentid) else 0,
+                    "intarget": 1 if libsumo.vehicle_getRoadID(vehicle) ==
+                                    libsumo.vehicle_getRoute(self.ego.agentid)[libsumo.vehicle_getRouteIndex(self.ego.agentid)+1] else 0,
+                    "insource": 1 if libsumo.vehicle_getRoute(self.ego.agentid)[libsumo.vehicle_getRouteIndex(self.ego.agentid)]
+                                    in target_edges else 0
+                }})
+            except IndexError:
+                vehicle_list.append({vehicle + str(self.ego.view.index(vehicle)): {
+                    "speed": libsumo.vehicle_getSpeed(vehicle),
+                    "laneid": libsumo.vehicle_getLaneIndex(vehicle),
+                    "lanepos": libsumo.vehicle_getLanePosition(vehicle),
+                    "inedge": 1 if libsumo.vehicle_getRoadID(vehicle) == libsumo.vehicle_getRoadID(self.ego.agentid) else 0,
+                    "intarget": 0,
+                    "insource": 1 if libsumo.vehicle_getRoute(self.ego.agentid)[libsumo.vehicle_getRouteIndex(self.ego.agentid)]
+                                    in target_edges else 0
+                }})
 
         if len(vehicle_list) > 0:
             obs = obs | {"vehicles": vehicle_list}
@@ -411,7 +422,7 @@ class RoundaboutEnv(gym.Env):
         if self.ego.agentid in libsumo.simulation_getCollidingVehiclesIDList():
             # terminate with 0 goal and time rewards
             if split_reward:
-                reward_matrix["goal"] += -100
+                reward_matrix["goal"] += -400
                 reward_matrix["time"] = -100
                 
                 return self.prev_obs, reward, reward_matrix, True, None

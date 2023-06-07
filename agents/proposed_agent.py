@@ -117,7 +117,7 @@ class ProposedAgent(Agent):
         # UNIVERSAL HYPERPARAMS
         log_freq = 10 # number of rounds between printing of loss and other ML statistics
         optimizer = tf.optimizers.Adam(alpha)
-        checkpoint_freq = 10
+        checkpoint_freq = 100
 
 #         # BEHAVIOUR SPECIFIC HYPERPARAMS
 #         b_q_layers = [256, 128, b_action_space_size] # layer parameters in the behavioural q network
@@ -567,14 +567,14 @@ class ProposedAgent(Agent):
 
         average_reward = [reward_history[max(0, episode - 100):(episode + 1)].mean() for episode in range(time_step)]
 
-        plt.plot(reward_history)
-        plt.title(f"{datetime.now}")
-        plt.savefig(f"{MODEL_DIR}/{time}_{time_step}/{time}_{time_step}.png")
+#         plt.plot(reward_history)
+#         plt.title(f"{datetime.now}")
+#         plt.savefig(f"{MODEL_DIR}/{time}_{time_step}/{time}_{time_step}.png")
 
-        plt.plot(average_reward)
-        plt.title(f"{time}_final average over time")
-        plt.savefig(f"{MODEL_DIR}/{time}_{time_step}/{time}_{time_step} average.png")
-        plt.close()
+#         plt.plot(average_reward)
+#         plt.title(f"{time}_final average over time")
+#         plt.savefig(f"{MODEL_DIR}/{time}_{time_step}/{time}_{time_step} average.png")
+#         plt.close()
 
     def select_action(self, time_step):
         # actions may not be selected without training
