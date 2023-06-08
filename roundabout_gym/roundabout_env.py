@@ -120,7 +120,7 @@ class RoundaboutEnv(gym.Env):
                     "inedge": 1 if libsumo.vehicle_getRoadID(vehicle) == libsumo.vehicle_getRoadID(self.ego.agentid) else 0,
                     "intarget": 1 if libsumo.vehicle_getRoadID(vehicle) ==
                                     libsumo.vehicle_getRoute(self.ego.agentid)[libsumo.vehicle_getRouteIndex(self.ego.agentid)+1] else 0,
-                    "insource": 1 if libsumo.vehicle_getRoute(self.ego.agentid)[libsumo.vehicle_getRouteIndex(self.ego.agentid)]
+                    "insource": 1 if libsumo.vehicle_getRoute(self.ego.agentid)[libsumo.vehicle_getRouteIndex(self.ego.agentid)+1]
                                     in target_edges else 0
                 }})
             except IndexError:
@@ -130,8 +130,7 @@ class RoundaboutEnv(gym.Env):
                     "lanepos": libsumo.vehicle_getLanePosition(vehicle),
                     "inedge": 1 if libsumo.vehicle_getRoadID(vehicle) == libsumo.vehicle_getRoadID(self.ego.agentid) else 0,
                     "intarget": 0,
-                    "insource": 1 if libsumo.vehicle_getRoute(self.ego.agentid)[libsumo.vehicle_getRouteIndex(self.ego.agentid)]
-                                    in target_edges else 0
+                    "insource": 0
                 }})
 
         if len(vehicle_list) > 0:
