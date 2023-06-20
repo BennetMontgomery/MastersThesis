@@ -14,7 +14,7 @@ SAVE_TXT = True
 validation_folder = './Validationconfgs/'
 model_folder = './models/'
 
-network_range = ["2023-06-06 20:50:03.308588_final", "2023-06-06 20:50:03.308588_final"]
+network_range = ["2023-06-09 05:50:18.280219_400", "2023-06-09 05:50:18.280219_400"]
 
 networks = listdir(model_folder)
 networks.sort()
@@ -84,7 +84,7 @@ def plot_validate():
         print(rewards_matrix)
             
 
-def graphically_validate(confg_idx=1, network="2023-06-06 20:50:03.308588_final"):
+def graphically_validate(confg_idx=1, network="2023-06-09 11:33:59.527673_final"):
     reward, reward_matrix = ego.validate(configs[confg_idx], validation_folder, npcs=npcs[confg_idx], network=network, graphical_mode=True, split_reward=True)
 
     return reward, reward_matrix
@@ -120,6 +120,7 @@ def sumo_score(sigma):
 
         # initial speed
         old_speed = libsumo.vehicle_getSpeed("ego")
+        old_accel = libsumo.vehicle_getAccel("ego")
 
         # initial lane
         old_lane = libsumo.vehicle_getLaneIndex("ego")
@@ -153,6 +154,7 @@ def sumo_score(sigma):
                 action[0] = 2
 
             new_speed = libsumo.vehicle_getSpeed("ego")
+            new_accel = libsumo.vehicle_getAccel("ego")
             action[1] = ((new_speed - old_speed) - 14)/2
 
             # calculate reward
@@ -165,7 +167,18 @@ def sumo_score(sigma):
             reward_matrix["ilc"] -= 5 if action[0] != 2 else 0
 
             # motion
-            reward -= 8 if abs(new_speed - old_speed) > 3 else 0
+            if abs(new_accel - old_accel) > 3:
+                reward -= 8
+
+                reward_matrix["motion"] -= 8
+            elif abs(new_accel - old_accel) > 2:
+                reward -= 4
+
+                reward_matrix["motion"] -= 4
+            elif abs(new_accel - old_accel) > 1:
+                reward -= 2
+
+                reward_matrix["motion"] -= 2
 
             # speed
             if new_speed > 0 or new_speed < -13:
@@ -176,7 +189,6 @@ def sumo_score(sigma):
                 reward_matrix["speed"] += 15 * ((new_speed / 13) - 1)
 
             libsumo.simulationStep()
-            print(libsumo.simulation_getCollidingVehiclesIDList())
 
             # goal
             # - timeout
@@ -199,6 +211,7 @@ def sumo_score(sigma):
                 break
 
             old_speed = new_speed
+            old_accel = new_accel
             old_lane = new_lane
             step += 1
 
@@ -212,4 +225,4 @@ def sumo_score(sigma):
 
 print(graphically_validate(confg_idx=0))
 #plot_validate()
-# sumo_score(0.5)
+# print(sumo_score(1.0))

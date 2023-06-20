@@ -535,11 +535,9 @@ class ProposedAgent(Agent):
             for feature in t_obs[1:]:
                 feature.append(0)
             t_action = np.argmax(self.throttle_net(t_obs))
-            print(t_action)
 
             if split_reward:
                 next_state, reward, reward_matrix, terminated, _ = self.eval_env.step([b_action, t_action], split_reward=True)
-                print(libsumo.simulation_getCollidingVehiclesIDList())
 
             else:
                 next_state, reward, terminated, _ = self.eval_env.step([b_action, t_action])
@@ -569,15 +567,6 @@ class ProposedAgent(Agent):
         self.save_model(self.folder)
 
         average_reward = [reward_history[max(0, episode - 100):(episode + 1)].mean() for episode in range(time_step)]
-
-#         plt.plot(reward_history)
-#         plt.title(f"{datetime.now}")
-#         plt.savefig(f"{MODEL_DIR}/{time}_{time_step}/{time}_{time_step}.png")
-
-#         plt.plot(average_reward)
-#         plt.title(f"{time}_final average over time")
-#         plt.savefig(f"{MODEL_DIR}/{time}_{time_step}/{time}_{time_step} average.png")
-#         plt.close()
 
     def select_action(self, time_step):
         # actions may not be selected without training
