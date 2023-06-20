@@ -13,8 +13,6 @@ from datetime import datetime
 from agents.behaviour_net import BehaviourNet
 from copy import deepcopy
 from parameters.simulator_params import maximum_npcs
-# from parameters.hyperparameters import variable_input_size, static_input_size, gamma, alpha, num_heads_b, \
-#     b_action_space_size, t_action_space_size
 from parameters.hyperparameters import gamma, b_action_space_size, t_action_space_size, variable_input_size, static_input_size
 from parameters.hyperparameters import alpha
 from parameters.hyperparameters import b_q_layers, t_q_layers, b_duration, t_replay_size, b_replay_size, e_decay
@@ -35,6 +33,12 @@ class ProposedAgent(Agent):
         self.throttle_net = None
         self.throttle_path = None
         self.behaviour_path = None
+        
+        self.gamma = gamma
+        self.update_freq_b = update_freq_b
+        self.update_freq_t = update_freq_t
+        self.alpha = alpha
+        self.e_decay = e_decay
 
     def save_model(self, model_name):
         os.system(f"mkdir -p {MODEL_DIR}")
@@ -45,17 +49,6 @@ class ProposedAgent(Agent):
         self.throttle_net.save_weights(f"{MODEL_DIR}/{model_name}/throttle")
 
     def load_model(self, model):
-        # self.behaviour_net = BehaviourNet(
-        #     static_input_size=static_input_size,
-        #     variable_input_size=variable_input_size,
-        #     attention_heads=num_heads_b,
-        #     q_layers=[256, 128, b_action_space_size],
-        #     attention_out_ff=128,
-        #     attention_in_d=256,
-        #     memory_cap=8000,
-        #     e_decay=0.001
-        # )
-        
         self.behaviour_net = BehaviourNet(
             static_input_size=static_input_size,
             variable_input_size=variable_input_size,
@@ -64,19 +57,8 @@ class ProposedAgent(Agent):
             attention_out_ff=b_feed_forward,
             attention_in_d=b_d_model,
             memory_cap=b_replay_size,
-            e_decay=e_decay
+            e_decay=self.e_decay
         )
-
-        # self.throttle_net = BehaviourNet(
-        #     static_input_size=static_input_size+1,
-        #     variable_input_size=variable_input_size,
-        #     attention_heads=8,
-        #     q_layers=[256, 128, t_action_space_size],
-        #     attention_out_ff=128,
-        #     attention_in_d=256,
-        #     memory_cap=8000,
-        #     e_decay=0.001
-        # )
         
         self.throttle_net = BehaviourNet(
             static_input_size=static_input_size+1,
@@ -91,7 +73,6 @@ class ProposedAgent(Agent):
 
         self.throttle_net.load_weights(f"{MODEL_DIR}/{model}/throttle")
         self.behaviour_net.load_weights(f"{MODEL_DIR}/{model}/behaviour")
-        # return tf.keras.models.load_model(f"{MODEL_DIR}/{model}")
 
     def flatten_obs(self, env_obs):
         # flatten observations to something passable to tensorflow
@@ -117,26 +98,8 @@ class ProposedAgent(Agent):
     def train_nets(self, episodes=2000, replay_cap=8000, batch_size=64):
         # UNIVERSAL HYPERPARAMS
         log_freq = 10 # number of rounds between printing of loss and other ML statistics
-        optimizer = tf.optimizers.Adam(alpha)
-        checkpoint_freq = 100
-
-#         # BEHAVIOUR SPECIFIC HYPERPARAMS
-#         b_q_layers = [256, 128, b_action_space_size] # layer parameters in the behavioural q network
-#         update_freq_b = 75 # number of rounds between updates to the target q bnet
-#         encoder_layer_b = 256 # width of the attention embeddings
-#         encoder_feed_forward_b = 128 # width of the attention post-processing network
-#         pooler_layers_b = encoder_layer_b # width and depth of the seq-2-vec processing network
-#         e_decay_b = 0.001 # epsilon decay for random action selection
-
-#         # THROTTLE SPECIFIC HYPERPARAMS
-#         t_action_space_size = 22
-#         t_q_layers = [256, 128, t_action_space_size]  # layer parameters in the throttle q network
-#         update_freq_t = 75  # number of rounds between updates to the target q tnet
-#         num_heads_t = 8  # number of attention heads
-#         encoder_layer_t = 256  # width of the attention embeddings
-#         encoder_feed_forward_t = 128  # width of the attention post-processing network
-#         pooler_layers_t = encoder_layer_b  # width and depth of the seq-2-vec processing network
-#         e_decay_t = 0.001  # epsilon decay for random action selection
+        optimizer = tf.optimizers.Adam(self.alpha)
+        checkpoint_freq = 50
 
         # start environment
         self.test_env = RoundaboutEnv(self)
@@ -145,17 +108,6 @@ class ProposedAgent(Agent):
         Experience = namedtuple('Experience', ['states', 'actions', 'reward', 'state_primes', 'terminates'])
 
         # CREATE NETWORKS
-        # self.behaviour_net = BehaviourNet(
-        #     static_input_size=static_input_size,
-        #     variable_input_size=variable_input_size,
-        #     attention_heads=num_heads_b,
-        #     q_layers=b_q_layers,
-        #     attention_out_ff=encoder_feed_forward_b,
-        #     attention_in_d=encoder_layer_b,
-        #     memory_cap=replay_cap,
-        #     e_decay=e_decay_b
-        # )
-        
         self.behaviour_net = BehaviourNet(
             static_input_size=static_input_size,
             variable_input_size=variable_input_size,
@@ -164,20 +116,9 @@ class ProposedAgent(Agent):
             attention_out_ff=b_feed_forward,
             attention_in_d=b_d_model,
             memory_cap=b_replay_size,
-            e_decay=e_decay
+            e_decay=self.e_decay
         )
         
-
-        # self.target_behaviour_net = BehaviourNet(
-        #     static_input_size=static_input_size,
-        #     variable_input_size=variable_input_size,
-        #     attention_heads=num_heads_b,
-        #     q_layers=b_q_layers,
-        #     attention_out_ff=encoder_feed_forward_b,
-        #     attention_in_d=encoder_layer_b,
-        #     memory_cap=replay_cap,
-        #     e_decay=e_decay_b
-        # )
         self.target_behaviour_net = BehaviourNet(
             static_input_size=static_input_size,
             variable_input_size=variable_input_size,
@@ -186,19 +127,9 @@ class ProposedAgent(Agent):
             attention_out_ff=b_feed_forward,
             attention_in_d=b_d_model,
             memory_cap=b_replay_size,
-            e_decay=e_decay
+            e_decay=self.e_decay
         )
 
-        # self.throttle_net = BehaviourNet(
-        #     static_input_size=static_input_size+1,
-        #     variable_input_size=variable_input_size,
-        #     attention_heads=num_heads_t,
-        #     q_layers=t_q_layers,
-        #     attention_out_ff=encoder_feed_forward_t,
-        #     attention_in_d=encoder_layer_t,
-        #     memory_cap=replay_cap,
-        #     e_decay=e_decay_t
-        # )
         self.throttle_net = BehaviourNet(
             static_input_size=static_input_size+1,
             variable_input_size=variable_input_size,
@@ -207,20 +138,9 @@ class ProposedAgent(Agent):
             attention_out_ff=t_feed_forward,
             attention_in_d=t_d_model,
             memory_cap=t_replay_size,
-            e_decay=e_decay
+            e_decay=self.e_decay
         )
         
-
-        # self.target_throttle_net = BehaviourNet(
-        #     static_input_size=static_input_size+1,
-        #     variable_input_size=variable_input_size,
-        #     attention_heads=num_heads_t,
-        #     q_layers=t_q_layers,
-        #     attention_out_ff=encoder_feed_forward_t,
-        #     attention_in_d=encoder_layer_t,
-        #     memory_cap=replay_cap,
-        #     e_decay=e_decay_t
-        # )
         self.target_throttle_net = BehaviourNet(
             static_input_size=static_input_size+1,
             variable_input_size=variable_input_size,
@@ -229,7 +149,7 @@ class ProposedAgent(Agent):
             attention_out_ff=t_feed_forward,
             attention_in_d=t_d_model,
             memory_cap=t_replay_size,
-            e_decay=e_decay
+            e_decay=self.e_decay
         )
 
         print(self.behaviour_net.layers)
@@ -242,7 +162,6 @@ class ProposedAgent(Agent):
             "ilc": np.empty(episodes),
             "motion": np.empty(episodes),
             "goal": np.empty(episodes),
-            # "drac": np.empty(episodes),
             "speed": np.empty(episodes)
         }
         env_wise_reward_history = {"magic": [], "simple": [], "simple.orig": [], "twolane": [], "threelane": [], "unrealistic": []}
@@ -272,7 +191,6 @@ class ProposedAgent(Agent):
                 "ilc": 0,
                 "motion": 0,
                 "goal": 0,
-                # "drac": 0,
                 "speed": 0,
             }
             step = 0
@@ -381,12 +299,9 @@ class ProposedAgent(Agent):
                     # debug = self.target_behaviour_net(behaviour_state_primes, training=True)
                     q_prime = np.max(self.target_behaviour_net(behaviour_state_primes, training=True), axis=1)
                     # q_prime = np.max(debug, axis=1)
-                    q_optimal = np.where(behaviour_terminates, behaviour_rewards, behaviour_rewards + gamma*q_prime)
+                    q_optimal = np.where(behaviour_terminates, behaviour_rewards, behaviour_rewards + self.gamma*q_prime)
                     q_optimal = tf.convert_to_tensor(q_optimal, dtype='float32')
                     with tf.GradientTape() as tape:
-                        # q = tf.math.reduce_sum(
-                        #     self.behaviour_net(np.atleast_2d(behaviour_states).astype('float32'), training=True)
-                        #     * tf.one_hot(behaviour_actions, b_action_space_size), axis=1)
                         q = tf.math.reduce_sum(self.behaviour_net(behaviour_states, training=True) * tf.one_hot(behaviour_actions, b_action_space_size), axis=1)
                         loss = tf.math.reduce_mean(tf.square(q_optimal - q))
 
@@ -404,12 +319,9 @@ class ProposedAgent(Agent):
                     # UPDATE THROTTLE NETWORK
                     # calculate loss and apply gradient descent
                     q_prime = np.max(self.target_throttle_net(throttle_state_primes, training=True), axis=1)
-                    q_optimal = np.where(throttle_terminates, throttle_rewards, throttle_rewards + gamma * q_prime)
+                    q_optimal = np.where(throttle_terminates, throttle_rewards, throttle_rewards + self.gamma * q_prime)
                     q_optimal = tf.convert_to_tensor(q_optimal, dtype='float32')
                     with tf.GradientTape() as tape:
-                        # q = tf.math.reduce_sum(
-                        #     self.throttle_net(np.atleast_2d(throttle_states).astype('float32'), training=True)
-                        #     * tf.one_hot(throttle_actions, t_action_space_size), axis=1)
                         q = tf.math.reduce_sum(self.throttle_net(throttle_states, training=True) * tf.one_hot(throttle_actions, t_action_space_size), axis=1)
                         loss = tf.math.reduce_mean(tf.square(q_optimal - q))
 
@@ -430,7 +342,7 @@ class ProposedAgent(Agent):
                     t_loss_step = 0
 
                 # update target networks
-                if total_step % update_freq_b == 0:
+                if total_step % self.update_freq_b == 0:
                     # print("updating")
                     behaviour_params = self.behaviour_net.trainable_variables
                     optimal_params = self.target_behaviour_net.trainable_variables
@@ -438,7 +350,7 @@ class ProposedAgent(Agent):
                     for bvar, ovar in zip(behaviour_params, optimal_params):
                         ovar.assign(bvar.numpy())
 
-                if total_step % update_freq_t == 0:
+                if total_step % self.update_freq_t == 0:
                     # print("updating")
                     throttle_params = self.throttle_net.trainable_variables
                     optimal_params = self.target_throttle_net.trainable_variables
@@ -468,7 +380,6 @@ class ProposedAgent(Agent):
                 "illegal_lane_change_reward": episode_reward_matrix["ilc"],
                 "smooth_motion_reward": episode_reward_matrix["motion"],
                 "goal_reward": episode_reward_matrix["goal"],
-                #"drac_reward": episode_reward_matrix["drac"],
                 "speed_reward": episode_reward_matrix["speed"],
                 f"{environment}_past_average_reward": env_wise_average_reward,
                 f"{environment}_aggregate_episode_reward": episode_return,
@@ -476,7 +387,6 @@ class ProposedAgent(Agent):
                 f"{environment}_illegal_lane_change_reward": episode_reward_matrix["ilc"],
                 f"{environment}_smooth_motion_reward": episode_reward_matrix["motion"],
                 f"{environment}_goal_reward": episode_reward_matrix["goal"],
-                # f"{environment}_drac_reward": episode_reward_matrix["drac"],
                 f"{environment}_speed_reward": episode_reward_matrix["speed"],
             })
 
@@ -523,7 +433,6 @@ class ProposedAgent(Agent):
                 "ilc": 0,
                 "motion": 0,
                 "goal": 0,
-                # "drac": 0,
                 "speed": 0,
         }
         terminated = False
