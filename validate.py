@@ -84,8 +84,8 @@ def plot_validate():
         print(rewards_matrix)
             
 
-def graphically_validate(confg_idx=1, network="2023-06-09 11:33:59.527673_final"):
-    reward, reward_matrix = ego.validate(configs[confg_idx], validation_folder, npcs=npcs[confg_idx], network=network, graphical_mode=True, split_reward=True)
+def graphically_validate(confg_idx=1, network="2023-06-09 05:50:18.280219_400"):
+    reward, reward_matrix = ego.validate(configs[confg_idx], validation_folder, npcs=npcs[confg_idx], network=network, graphical_mode=False, split_reward=True)
 
     return reward, reward_matrix
 
@@ -223,6 +223,6 @@ def sumo_score(sigma):
 
     return rewards, rewards_matrix
 
-print(graphically_validate(confg_idx=0))
+print(graphically_validate(confg_idx=4))
 #plot_validate()
-# print(sumo_score(1.0))
+# print(sumo_score(0.0))
